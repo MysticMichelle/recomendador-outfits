@@ -1,4 +1,4 @@
-# 👕 Recomendador de outfits por ocasión con procesamiento de imágenes
+# Recomendador de outfits por ocasión con procesamiento de imágenes
 
 Proyecto final de **Sistemas Inteligentes** · UNAM FES Acatlán · MAC · Grupo 1704 · 2027-I
 
@@ -62,7 +62,7 @@ fotos ──► 1_etiquetar.py ──► etiquetas/*.csv  (tipo, color, patrón,
 
 | Campo | Valores |
 |---|---|
-| Tipo | 👕 Arriba · 👖 Abajo · 👗 Completo (vestido, overol) · 👟 Calzado · 👜 Otro |
+| Tipo |  Arriba ·  Abajo ·  Completo (vestido, overol) ·  Calzado ·  Otro |
 | Color real | negro, blanco, gris, beige, café, azul marino, azul, celeste, turquesa, verde, amarillo, naranja, rojo, vino, rosa, morado, multicolor |
 | Patrón | liso, rayas, cuadros, floral, lunares, animal print, gráfico / logo, otro estampado |
 | Mezclilla | sí / no (es una tela, no un color) |
@@ -124,7 +124,7 @@ Para probar sin fotos reales: `py -3.13 demo/generar_fotos_demo.py` (y `--borrar
 
 | Modelo de tipo | Accuracy | F1 macro | F1 validación cruzada |
 |---|---|---|---|
-| Random Forest ✅ | 0.732 | 0.628 | **0.630 ± 0.075** |
+| Random Forest | 0.732 | 0.628 | **0.630 ± 0.075** |
 | SVM (RBF) | 0.742 | 0.638 | 0.617 ± 0.063 |
 | Red neuronal (MLP) | 0.727 | 0.604 | 0.579 ± 0.068 |
 | KNN (k = 5) | 0.679 | 0.548 | 0.525 ± 0.064 |
