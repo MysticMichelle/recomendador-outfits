@@ -1,8 +1,7 @@
-# Tema visual de la app (colores y letra). Se puede cambiar libremente.
 [theme]
 base = "light"
-primaryColor = "#1f3a68"
-backgroundColor = "#ffffff"
+primaryColor = "#2b4c7e"
+backgroundColor = "#f8f9fc"
 secondaryBackgroundColor = "#eef2f8"
-textColor = "#1b1f27"
+textColor = "#1a202c"
 font = "sans serif"
