@@ -224,6 +224,14 @@ with tab_rec:
             st.warning("No se pudo armar ningún outfit. Se necesita una prenda de arriba y una de abajo, "
                        "o una prenda completa y calzado" +
                        (f", marcadas para «{NOMBRE_OCASION[ocasion]}»." if ocasion else "."))
+        else:
+            etiqueta_oc = NOMBRE_OCASION[ocasion] if ocasion else "Cualquier ocasión"
+            st.markdown(
+                f"<div class='resumen-outfits'>Se muestran <strong>{len(resultados)}</strong> "
+                f"{'recomendación' if len(resultados) == 1 else 'recomendaciones'} para "
+                f"<strong>{etiqueta_oc}</strong>.</div>",
+                unsafe_allow_html=True,
+            )
         for n, r in enumerate(resultados, start=1):
             with st.container(border=True):
                 c_head1, c_head2 = st.columns([2, 3])
@@ -340,30 +348,33 @@ with tab_tablero:
 # ===========================================================================
 with tab_closet:
     if not usuario:
-        st.info("Escribe tu nombre de usuario en la barra lateral para ver tu clóset.")
+        st.info("Escribe tu nombre de usuario en la barra lateral para ver o guardar tu clóset.")
     else:
         guardadas = prendas_guardadas()
-        st.write(f"**{len(guardadas)}** prendas guardadas para **{usuario}**.")
-        if len(guardadas) > MAX_FOTOS_RECOMENDADAS:
-            st.markdown(
-                f"<div class='aviso-limite'>⚠️ Tienes <strong>{len(guardadas)} prendas</strong> guardadas. "
-                f"Las fotos se muestran en miniatura para mantener la página rápida.</div>",
-                unsafe_allow_html=True,
-            )
-        cols = st.columns(4)
-        for i, g in enumerate(guardadas):
-            d = g["datos"]
-            with cols[i % 4]:
-                with st.container(border=True):
-                    st.image(crear_miniatura(g["imagen"], lado_max=280), width=185)
-                    st.markdown(
-                        f"**{NOMBRE_CLASE[d['tipo']]}** · {d['color']['nombre']}  \n"
-                        f"<span class='vence'>Se borra el {g['vence'][:10]}</span>",
-                        unsafe_allow_html=True,
-                    )
-                    if st.button("🗑️ Quitar", key=f"del_{g['id']}"):
-                        almacen.borrar(usuario, g["id"])
-                        st.rerun()
+        st.write(f"**{len(guardadas)}** {'prenda guardada' if len(guardadas) == 1 else 'prendas guardadas'} para **{usuario}**.")
+        if not guardadas:
+            st.info("Aún no tienes prendas guardadas. Ve a **✨ Recomendador**, sube fotos y pulsa **Guardar estas prendas en mi clóset**.")
+        else:
+            if len(guardadas) > MAX_FOTOS_RECOMENDADAS:
+                st.markdown(
+                    f"<div class='aviso-limite'>⚠️ Tienes <strong>{len(guardadas)} prendas</strong> guardadas. "
+                    f"Las fotos se muestran en miniatura para mantener la página rápida.</div>",
+                    unsafe_allow_html=True,
+                )
+            cols = st.columns(4)
+            for i, g in enumerate(guardadas):
+                d = g["datos"]
+                with cols[i % 4]:
+                    with st.container(border=True):
+                        st.image(crear_miniatura(g["imagen"], lado_max=280), width=185)
+                        st.markdown(
+                            f"**{NOMBRE_CLASE[d['tipo']]}** · {d['color']['nombre']}  \n"
+                            f"<span class='vence'>Se borra el {g['vence'][:10]}</span>",
+                            unsafe_allow_html=True,
+                        )
+                        if st.button("🗑️ Quitar", key=f"del_{g['id']}"):
+                            almacen.borrar(usuario, g["id"])
+                            st.rerun()
 
 # ===========================================================================
 # 4. ARQUITECTURA
