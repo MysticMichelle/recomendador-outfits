@@ -78,8 +78,14 @@ def predecir(f):
     ocas = []
     if M and M.get("ocasion"):
         onehot = np.array([[int(tipo == c) for c in CLASES]])
-        pred = M["ocasion"]["modelo"].predict(np.hstack([x, onehot]))[0]
-        ocas = [o for o, v in zip(M["ocasion"]["ocasiones"], pred) if v == 1]
+        modelo_oc = M["ocasion"]["modelo"]
+        umbrales = M["ocasion"].get("umbrales")
+        if umbrales:  # umbral propio por ocasión (calculado en 4_modelado.py)
+            probas = [p[0, 1] for p in modelo_oc.predict_proba(np.hstack([x, onehot]))]
+            ocas = [o for o, p in zip(M["ocasion"]["ocasiones"], probas) if p >= umbrales[o]]
+        else:
+            pred = modelo_oc.predict(np.hstack([x, onehot]))[0]
+            ocas = [o for o, v in zip(M["ocasion"]["ocasiones"], pred) if v == 1]
     return tipo, seguridad, color, ocas
 
 

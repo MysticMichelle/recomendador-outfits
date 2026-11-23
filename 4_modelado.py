@@ -36,11 +36,12 @@ import joblib
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from sklearn.base import clone
 from sklearn.cluster import KMeans
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (ConfusionMatrixDisplay, accuracy_score, classification_report,
-                             f1_score, precision_score, recall_score, silhouette_score)
+                             f1_score, fbeta_score, precision_score, recall_score, silhouette_score)
 from sklearn.multioutput import MultiOutputClassifier
 from sklearn.model_selection import KFold, StratifiedKFold, cross_val_predict, cross_val_score, train_test_split
 from sklearn.neighbors import KNeighborsClassifier
@@ -219,20 +220,46 @@ if ocas:
             StandardScaler(), LogisticRegression(max_iter=3000, class_weight="balanced"))),
     }
     cv_oc = KFold(n_splits=5, shuffle=True, random_state=SEMILLA)
-    mejor_oc, mejor_f1, mejor_pred = None, -1, None
+    umbrales_grid = np.round(np.arange(0.10, 0.91, 0.05), 2)
+
+    def probas_fuera_de_muestra(modelo):
+        """Probabilidad de cada ocasión para cada prenda, calculada sin haberla visto (validación cruzada)."""
+        P = np.zeros(Y.shape, dtype=float)
+        for tr, te in cv_oc.split(X_oc):
+            m = clone(modelo).fit(X_oc[tr], Y[tr])
+            P[te] = np.column_stack([p[:, 1] for p in m.predict_proba(X_oc[te])])
+        return P
+
+    # Con pesos balanceados el modelo marca de más (ej. jeans como "deportivo") si se usa el
+    # corte de 50 %. Como la ocasión se usa de FILTRO, importa más no colar prendas que no van
+    # (precisión) que no dejar fuera alguna dudosa. Por eso, para cada ocasión, se busca el umbral
+    # con el mejor F-beta con beta = 0.5 (da el doble de peso a la precisión que al recall).
+    mejor_oc, mejor_f1 = None, -1
     for nombre_oc, modelo_oc in candidatos_oc.items():
-        pred_o = cross_val_predict(modelo_oc, X_oc, Y, cv=cv_oc)
-        f1s = [f1_score(Y[:, k], pred_o[:, k], zero_division=0) for k in range(len(ocas))]
-        print(f"  {nombre_oc:20s} F1 promedio (validación cruzada) = {np.mean(f1s):.3f}")
-        if np.mean(f1s) > mejor_f1:
-            mejor_oc, mejor_f1, mejor_pred = nombre_oc, np.mean(f1s), pred_o
+        P = probas_fuera_de_muestra(modelo_oc)
+        umbrales, fbs = [], []
+        for k in range(len(ocas)):
+            fb_por_umbral = [fbeta_score(Y[:, k], (P[:, k] >= u).astype(int), beta=0.5, zero_division=0)
+                             for u in umbrales_grid]
+            j = int(np.argmax(fb_por_umbral))
+            umbrales.append(float(umbrales_grid[j]))
+            fbs.append(fb_por_umbral[j])
+        print(f"  {nombre_oc:20s} F0.5 promedio (validación cruzada, umbral ajustado) = {np.mean(fbs):.3f}")
+        if np.mean(fbs) > mejor_f1:
+            mejor_oc, mejor_f1, mejor_P, mejor_umbrales = nombre_oc, np.mean(fbs), P, umbrales
     print(f"  >>> Modelo de ocasiones: {mejor_oc}")
     for k, o in enumerate(ocas):
-        f1 = f1_score(Y[:, k], mejor_pred[:, k], zero_division=0)
-        filas_oc.append({"ocasion": NOMBRE_OCASION[o], "prendas": int(Y[:, k].sum()), "f1": round(f1, 4), "modelo": mejor_oc})
-        print(f"  {NOMBRE_OCASION[o]:18s} prendas={int(Y[:, k].sum()):4d}  F1={f1:.3f}")
-    modelo_final_oc = candidatos_oc[mejor_oc].fit(X_oc, Y)
-    paquete["ocasion"] = {"modelo": modelo_final_oc, "ocasiones": ocas, "nombre": mejor_oc}
+        pred_k = (mejor_P[:, k] >= mejor_umbrales[k]).astype(int)
+        f1 = f1_score(Y[:, k], pred_k, zero_division=0)
+        prec = precision_score(Y[:, k], pred_k, zero_division=0)
+        rec = recall_score(Y[:, k], pred_k, zero_division=0)
+        filas_oc.append({"ocasion": NOMBRE_OCASION[o], "prendas": int(Y[:, k].sum()), "umbral": mejor_umbrales[k],
+                         "precision": round(prec, 4), "recall": round(rec, 4), "f1": round(f1, 4), "modelo": mejor_oc})
+        print(f"  {NOMBRE_OCASION[o]:18s} prendas={int(Y[:, k].sum()):4d}  umbral={mejor_umbrales[k]:.2f}  "
+              f"precisión={prec:.3f}  recall={rec:.3f}  F1={f1:.3f}")
+    modelo_final_oc = clone(candidatos_oc[mejor_oc]).fit(X_oc, Y)
+    paquete["ocasion"] = {"modelo": modelo_final_oc, "ocasiones": ocas, "nombre": mejor_oc,
+                          "umbrales": dict(zip(ocas, mejor_umbrales))}
 else:
     print("  No hay suficientes prendas por ocasión para entrenar.")
     paquete["ocasion"] = None
