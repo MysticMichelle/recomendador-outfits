@@ -8,5 +8,4 @@ datos/fotos/*
 datos/closets/
 # Claves de la nube (Supabase/Firebase): nunca se suben
 .streamlit/secrets.toml
-# El modelo pesa más de 25 MB: se genera con 4_modelado.py
-modelos/*.joblib
+
