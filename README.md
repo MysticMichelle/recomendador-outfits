@@ -62,7 +62,7 @@ fotos ──► 1_etiquetar.py ──► etiquetas/*.csv  (tipo, color, patrón,
 
 | Campo | Valores |
 |---|---|
-| Tipo |  Arriba ·  Abajo ·  Completo (vestido, overol) ·  Calzado ·  Otro |
+| Tipo | Arriba · Abajo · Completo (vestido, overol) · Calzado · Otro |
 | Color real | negro, blanco, gris, beige, café, azul marino, azul, celeste, turquesa, verde, amarillo, naranja, rojo, vino, rosa, morado, multicolor |
 | Patrón | liso, rayas, cuadros, floral, lunares, animal print, gráfico / logo, otro estampado |
 | Mezclilla | sí / no (es una tela, no un color) |
@@ -87,15 +87,8 @@ py -3.13 4_modelado.py                    # 4. modelos
 py -3.13 -m streamlit run app.py          # 5. web app
 ```
 
-> **El modelo entrenado (`modelos/modelos.joblib`) no se incluye en el repositorio** porque pesa más de 25 MB.
-> Para generarlo basta con correr `py -3.13 4_modelado.py` (tarda unos minutos). **No necesita las fotos**: entrena con `datos/dataset_limpio.csv`, que sí está en el repositorio.
->
-> Si solo quieres abrir la app con los datos del equipo:
-> ```bash
-> py -3.13 -m pip install -r requirements.txt
-> py -3.13 4_modelado.py
-> py -3.13 -m streamlit run app.py
-> ```
+> El repositorio incluye el modelo ya entrenado (`modelos/modelos.joblib`, 5.4 MB comprimido), así que la app se puede abrir directamente.
+> Para reentrenarlo basta con `py -3.13 4_modelado.py`: **no necesita las fotos**, usa `datos/dataset_limpio.csv`.
 
 Para probar sin fotos reales: `py -3.13 demo/generar_fotos_demo.py` (y `--borrar` para quitarlas).
 
@@ -124,7 +117,7 @@ Para probar sin fotos reales: `py -3.13 demo/generar_fotos_demo.py` (y `--borrar
 
 | Modelo de tipo | Accuracy | F1 macro | F1 validación cruzada |
 |---|---|---|---|
-| Random Forest | 0.732 | 0.628 | **0.630 ± 0.075** |
+| Random Forest (seleccionado) | 0.732 | 0.628 | **0.630 ± 0.075** |
 | SVM (RBF) | 0.742 | 0.638 | 0.617 ± 0.063 |
 | Red neuronal (MLP) | 0.727 | 0.604 | 0.579 ± 0.068 |
 | KNN (k = 5) | 0.679 | 0.548 | 0.525 ± 0.064 |
