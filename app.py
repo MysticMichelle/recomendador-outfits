@@ -19,6 +19,7 @@ Ejecutar:
 
 import io
 
+import altair as alt
 import joblib
 import numpy as np
 import pandas as pd
@@ -215,37 +216,57 @@ with tab_tablero:
         met_c = pd.read_csv(METRICAS_COLOR) if METRICAS_COLOR.exists() else None
         met_o = pd.read_csv(METRICAS_OCASION) if METRICAS_OCASION.exists() and METRICAS_OCASION.stat().st_size > 2 else None
 
-        k1, k2, k3, k4, k5, k6 = st.columns(6)
-        k1.metric("Fotos en el dataset", len(df))
-        k2.metric("Personas", df["persona"].nunique())
+        def barras(serie, titulo, color="#1f3a68"):
+            """Barras horizontales ordenadas de mayor a menor, con el nombre completo de cada categoría."""
+            datos = serie.rename_axis("categoria").reset_index(name="valor")
+            grafica = alt.Chart(datos).mark_bar(color=color, cornerRadiusEnd=3).encode(
+                x=alt.X("valor:Q", title=None),
+                y=alt.Y("categoria:N", sort="-x", title=None, axis=alt.Axis(labelLimit=200)),
+                tooltip=[alt.Tooltip("categoria:N", title=titulo), alt.Tooltip("valor:Q", title="Cantidad")],
+            ).properties(height=max(160, 26 * len(datos)), width="container")
+            st.markdown(f"**{titulo}**")
+            st.altair_chart(grafica)
+
+        integrantes = df.loc[df["persona"].str.lower() != "general", "persona"].nunique()
+        st.markdown("#### Datos")
+        k1, k2, k3, k4 = st.columns(4)
+        k1.metric("Fotos en el dataset", f"{len(df):,}")
+        k2.metric("Integrantes que aportaron fotos", integrantes)
         k3.metric("% prendas neutras", f"{100 * df['color'].isin(NEUTROS).mean():.0f}%")
+        k4.metric("% prendas casuales", f"{100 * df['oc_casual'].mean():.0f}%")
+        st.markdown("#### Modelos")
+        k5, k6, k7, k8 = st.columns(4)
         if met is not None:
-            k4.metric(f"Accuracy tipo ({met.iloc[0]['modelo']})", f"{100 * met.iloc[0]['accuracy']:.0f}%")
-            k5.metric("F1 macro tipo", f"{met.iloc[0]['f1']:.2f}")
+            k5.metric(f"Accuracy tipo ({met.iloc[0]['modelo']})", f"{100 * met.iloc[0]['accuracy']:.0f}%")
+            k6.metric("F1 macro tipo", f"{met.iloc[0]['f1']:.2f}")
         if met_c is not None:
-            k6.metric("Accuracy del color", f"{100 * met_c['accuracy'].max():.0f}%")
+            k7.metric("Accuracy del color", f"{100 * met_c['accuracy'].max():.0f}%")
+        if met_o is not None and "precision" in met_o:
+            k8.metric("Precisión de ocasiones", f"{100 * met_o['precision'].mean():.0f}%")
 
         c1, c2 = st.columns(2)
         with c1:
-            st.markdown("**Fotos por tipo de prenda**")
-            st.bar_chart(df["tipo"].value_counts().reindex(CLASES, fill_value=0))
+            barras(df["tipo"].map(lambda t: NOMBRE_CLASE[t].split(" ", 1)[-1]).value_counts(), "Fotos por tipo de prenda")
         with c2:
-            st.markdown("**Color real (etiquetado)**")
-            st.bar_chart(df["color"].value_counts())
+            barras(df["color"].value_counts(), "Color real (etiquetado)", "#b8892b")
         c3, c4 = st.columns(2)
         with c3:
-            st.markdown("**Prendas por ocasión**")
-            st.bar_chart(pd.Series({NOMBRE_OCASION[o]: int(df[f"oc_{o}"].sum()) for o in OCASIONES}))
+            barras(pd.Series({NOMBRE_OCASION[o]: int(df[f"oc_{o}"].sum()) for o in OCASIONES}), "Prendas por ocasión")
         with c4:
-            st.markdown("**Patrón**")
-            st.bar_chart(df["patron"].value_counts())
-        st.markdown("**Fotos por persona**")
-        st.bar_chart(df["persona"].value_counts())
+            barras(df["patron"].value_counts(), "Patrón", "#b8892b")
+        barras(df["persona"].value_counts(), "Fotos por carpeta")
 
         if met is not None:
             st.markdown("### Modelos de tipo de prenda")
             st.dataframe(met, hide_index=True)
-            st.bar_chart(met.set_index("modelo")[["accuracy", "f1"]], stack=False)
+            comp = met.melt(id_vars="modelo", value_vars=["accuracy", "f1"], var_name="métrica", value_name="valor")
+            st.altair_chart(alt.Chart(comp).mark_bar().encode(
+                y=alt.Y("modelo:N", sort="-x", title=None, axis=alt.Axis(labelLimit=200)),
+                x=alt.X("valor:Q", scale=alt.Scale(domain=[0, 1]), title=None),
+                yOffset="métrica:N",
+                color=alt.Color("métrica:N", scale=alt.Scale(range=["#1f3a68", "#b8892b"]), title=None),
+                tooltip=["modelo", "métrica", alt.Tooltip("valor:Q", format=".3f")],
+            ).properties(height=320, width="container"))
             if (MODELADO / "03_matriz_confusion.png").exists():
                 st.image(str(MODELADO / "03_matriz_confusion.png"), caption="Matriz de confusión del mejor modelo")
             if (MODELADO / "01_kmeans_codo_silueta.png").exists():
@@ -257,7 +278,7 @@ with tab_tablero:
                 st.dataframe(met_c, hide_index=True)
         if met_o is not None:
             with co:
-                st.markdown("### Ocasiones: F1 por ocasión")
+                st.markdown("### Ocasiones: umbral, precisión, recall y F1")
                 st.dataframe(met_o, hide_index=True)
 
         graficas = sorted(EDA.glob("*.png")) if EDA.exists() else []
