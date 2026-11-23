@@ -1,6 +1,6 @@
-ocasion,prendas,f1,modelo
-Casual / diario,674,0.7498,Regresión logística
-Business casual,183,0.3368,Regresión logística
-Formal / evento,113,0.4343,Regresión logística
-Deportivo,122,0.3011,Regresión logística
-Fiesta / noche,103,0.6172,Regresión logística
+ocasion,prendas,umbral,precision,recall,f1,modelo
+Casual / diario,674,0.55,0.8016,0.7433,0.7714,Random Forest
+Business casual,183,0.45,0.3462,0.1967,0.2509,Random Forest
+Formal / evento,113,0.5,0.6226,0.292,0.3976,Random Forest
+Deportivo,122,0.6,0.8235,0.1148,0.2014,Random Forest
+Fiesta / noche,103,0.6,0.7679,0.4175,0.5409,Random Forest
