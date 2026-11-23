@@ -50,7 +50,9 @@ limpiar_al_iniciar()
 
 
 @st.cache_resource
-def cargar_modelos():
+def cargar_modelos(version):
+    """'version' es la fecha de modificación del archivo: si se reentrena o se sube un
+    modelo nuevo, cambia y Streamlit vuelve a cargarlo en lugar de usar el de la memoria."""
     return joblib.load(MODELO_FINAL) if MODELO_FINAL.exists() else None
 
 
@@ -60,7 +62,7 @@ def analizar(datos):
     return extraer(Image.open(io.BytesIO(datos)))
 
 
-M = cargar_modelos()
+M = cargar_modelos(MODELO_FINAL.stat().st_mtime if MODELO_FINAL.exists() else 0)
 
 
 def predecir(f):
