@@ -87,7 +87,7 @@ py -3.13 4_modelado.py                    # 4. modelos
 py -3.13 -m streamlit run app.py          # 5. web app
 ```
 
-> El repositorio incluye el modelo ya entrenado (`modelos/modelos.joblib`, 5.4 MB comprimido), así que la app se puede abrir directamente.
+> El repositorio incluye el modelo ya entrenado (`modelos/modelos.joblib`, 10.4 MB comprimido), así que la app se puede abrir directamente.
 > Para reentrenarlo basta con `py -3.13 4_modelado.py`: **no necesita las fotos**, usa `datos/dataset_limpio.csv`.
 
 Para probar sin fotos reales: `py -3.13 demo/generar_fotos_demo.py` (y `--borrar` para quitarlas).
@@ -101,7 +101,7 @@ Para probar sin fotos reales: `py -3.13 demo/generar_fotos_demo.py` (y `--borrar
 **Supervisado**
 - **Tipo de prenda** (5 clases): se comparan KNN, regresión logística, árbol de decisión, Random Forest, SVM y red neuronal (MLP) con accuracy, precisión, recall y F1 macro, más validación cruzada de 5 particiones. Se usa `class_weight="balanced"` por el desbalance de clases. El mejor modelo se elige por F1 de validación cruzada y da el **% de seguridad**.
 - **Color:** se compara la accuracy de las reglas HSV contra un Random Forest entrenado con el color real etiquetado; la app usa el mejor.
-- **Ocasiones:** un clasificador binario por ocasión (una prenda puede servir para varias); se comparan Random Forest y regresión logística y se elige el de mayor F1 promedio en validación cruzada.
+- **Ocasiones:** un clasificador binario por ocasión (una prenda puede servir para varias); se comparan Random Forest y regresión logística; para cada ocasión se ajusta el umbral de decisión que maximiza F0.5 (prioriza la precisión, porque la ocasión se usa como filtro) y se elige el modelo con mejor F0.5 promedio.
 
 ## Resultados (1 043 fotos)
 
@@ -113,7 +113,7 @@ Para probar sin fotos reales: `py -3.13 demo/generar_fotos_demo.py` (y `--borrar
 | k-means (todas las fotos) | mejor *k* = 3, silueta 0.099: los grupos **no** corresponden a los tipos de prenda |
 | Tipo de prenda | **Random Forest**: accuracy 0.732, F1 macro 0.628 (validación cruzada 0.630 ± 0.075) |
 | Color | reglas HSV 0.512 → **Random Forest 0.607** |
-| Ocasiones | **Regresión logística**, F1 promedio 0.488 (casual 0.750 · fiesta 0.617 · formal 0.434 · business casual 0.337 · deportivo 0.301) |
+| Ocasiones | **Random Forest** con umbral por ocasión: precisión promedio 0.673, recall 0.353 (casual: precisión 0.80 / recall 0.74 · deportivo: 0.82 / 0.12 · fiesta: 0.77 / 0.42) |
 
 | Modelo de tipo | Accuracy | F1 macro | F1 validación cruzada |
 |---|---|---|---|
