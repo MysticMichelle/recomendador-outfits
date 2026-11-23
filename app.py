@@ -118,7 +118,7 @@ def color_para_reglas(f, nombre):
 # ---------------------------------------------------------------- usuario (Mi clóset)
 with st.sidebar:
     st.header("👚 Mi clóset")
-    usuario = st.text_input("Tu nombre de usuario", placeholder="ej. michelle",
+    usuario = st.text_input("Tu nombre de usuario", placeholder="Nombre usuario",
                             help="Solo letras y números. Demo: no tiene contraseña.")
     st.caption(f"Las prendas que guardes se conservan {DIAS_GUARDADO} días y luego se borran solas.")
 
@@ -205,6 +205,8 @@ with tab_rec:
                             "mezclilla": mezclilla, "ocasiones": ocas, "color": color_para_reglas(f, color)})
 
     if prendas:
+        if not usuario:
+            st.caption("💡 Escribe tu nombre de usuario en el panel izquierdo y presiona Enter para activar el guardado.")
         if st.button("💾 Guardar estas prendas en mi clóset", disabled=not usuario,
                      help=None if usuario else "Escribe tu usuario en la barra lateral"):
             for p in prendas:
@@ -219,7 +221,19 @@ with tab_rec:
     if st.button("✨ Recomendar outfits", type="primary"):
         todas = prendas + ([{"nombre": g["nombre"], "imagen": g["imagen"], **g["datos"]} for g in guardadas]
                            if usar_closet else [])
-        resultados = recomendar(todas, ocasion, top=top)
+        resultados_raw = recomendar(todas, ocasion, top=max(top * 3, top))
+        resultados = []
+        vistas = set()
+        for r in resultados_raw:
+            firma = tuple(sorted(
+                (p.get("nombre", ""), p.get("tipo", ""), p.get("color", {}).get("nombre", ""), len(p.get("imagen", b"")))
+                for p in r.get("piezas", [])
+            ))
+            if firma not in vistas:
+                vistas.add(firma)
+                resultados.append(r)
+            if len(resultados) >= top:
+                break
         if not resultados:
             st.warning("No se pudo armar ningún outfit. Se necesita una prenda de arriba y una de abajo, "
                        "o una prenda completa y calzado" +
