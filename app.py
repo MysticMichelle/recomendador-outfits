@@ -2,19 +2,19 @@
 PASO 5 · WEB APP + TABLERO ANALÍTICO
 ------------------------------------
 Pestañas:
-  1. Recomendador : el usuario elige una OCASIÓN y sube fotos. Para cada foto,
+1. Recomendador : el usuario elige una OCASIÓN y sube fotos. Para cada foto,
                     el modelo reconoce el tipo de prenda (con % de seguridad),
                     el color (k-means + reglas o modelo) y sugiere ocasiones.
                     Las reglas de color + la colorimetría de la ocasión
                     califican cada outfit.
-  2. Tablero      : KPIs del dataset y de los modelos + gráficas del EDA.
-  3. Mi clóset    : prendas guardadas del usuario (se borran solas tras DIAS_GUARDADO días).
-  4. Arquitectura : cómo funciona la solución.
+2. Tablero      : KPIs del dataset y de los modelos + gráficas del EDA.
+3. Mi clóset    : prendas guardadas del usuario (se borran solas tras DIAS_GUARDADO días).
+4. Arquitectura : cómo funciona la solución.
 
 Apariencia: .streamlit/config.toml (colores) y assets/estilo.css (estilos extra).
 
 Ejecutar:
-    py -3.13 -m streamlit run app.py
+    python3 -m streamlit run app.py
 """
 
 import io
@@ -24,15 +24,17 @@ import joblib
 import numpy as np
 import pandas as pd
 import streamlit as st
-from PIL import Image
+from PIL import Image, ImageOps
 
 from src.caracteristicas import extraer
 from src.color_kmeans import rgb_a_hex
 from src.closet import obtener_almacen
-from src.config import (CLASES, COLORES, DATASET, DIAS_GUARDADO, EDA, ESTILO_CSS, METRICAS, METRICAS_COLOR, METRICAS_OCASION, MODELADO,
-                        MODELO_FINAL, NEUTROS, NOMBRE_CLASE, NOMBRE_OCASION, OCASIONES, PATRONES, TONO_COLOR,
-                        UMBRAL_SEGURIDAD)
+from src.config import (CLASES, COLORES, DATASET, DIAS_GUARDADO, EDA, ESTILO_CSS, METRICAS, METRICAS_COLOR,
+                        METRICAS_OCASION, MODELADO, MODELO_FINAL, NEUTROS, NOMBRE_CLASE, NOMBRE_OCASION,
+                        OCASIONES, PATRONES, TONO_COLOR, UMBRAL_SEGURIDAD)
 from src.reglas import recomendar
+
+MAX_FOTOS_RECOMENDADAS = 30
 
 st.set_page_config(page_title="Recomendador de outfits", page_icon="👕", layout="wide")
 if ESTILO_CSS.exists():
@@ -63,6 +65,17 @@ def analizar(datos):
     return extraer(Image.open(io.BytesIO(datos)))
 
 
+@st.cache_data(show_spinner=False)
+def crear_miniatura(datos, lado_max=320):
+    """Genera una miniatura ligera en JPEG para mostrar rápido en pantalla sin alentar la app."""
+    img = Image.open(io.BytesIO(datos))
+    img = ImageOps.exif_transpose(img).convert("RGB")
+    img.thumbnail((lado_max, lado_max))
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=82, optimize=True)
+    return buf.getvalue()
+
+
 M = cargar_modelos(MODELO_FINAL.stat().st_mtime if MODELO_FINAL.exists() else 0)
 
 
@@ -83,7 +96,7 @@ def predecir(f):
         onehot = np.array([[int(tipo == c) for c in CLASES]])
         modelo_oc = M["ocasion"]["modelo"]
         umbrales = M["ocasion"].get("umbrales")
-        if umbrales:  # umbral propio por ocasión (calculado en 4_modelado.py)
+        if umbrales:
             probas = [p[0, 1] for p in modelo_oc.predict_proba(np.hstack([x, onehot]))]
             ocas = [o for o, p in zip(M["ocasion"]["ocasiones"], probas) if p >= umbrales[o]]
         else:
@@ -120,15 +133,19 @@ def prendas_guardadas():
 
 
 st.title("👕 Recomendador de outfits")
-tab_rec, tab_tablero, tab_closet, tab_arq = st.tabs(["✨ Recomendador", "📊 Tablero analítico", "👚 Mi clóset",
-                                                     "🧩 Arquitectura"])
+tab_rec, tab_tablero, tab_closet, tab_arq = st.tabs([
+    "✨ Recomendador",
+    "📊 Tablero analítico",
+    "👚 Mi clóset",
+    "🧩 Arquitectura",
+])
 
 # ===========================================================================
 # 1. RECOMENDADOR
 # ===========================================================================
 with tab_rec:
     if M is None:
-        st.warning("Todavía no hay modelos entrenados (corre `py -3.13 4_modelado.py`). "
+        st.warning("Todavía no hay modelos entrenados (corre `python3 4_modelado.py`). "
                    "Mientras, elige todo a mano.")
     else:
         st.caption(f"Tipo de prenda: **{M['tipo']['nombre']}** · Color: "
@@ -142,34 +159,48 @@ with tab_rec:
 
     archivos = st.file_uploader("2 · Sube fotos de tu ropa (todas juntas)",
                                 type=["jpg", "jpeg", "png", "webp"], accept_multiple_files=True)
+
+    if archivos and len(archivos) > MAX_FOTOS_RECOMENDADAS:
+        st.markdown(
+            f"<div class='aviso-limite'>⚠️ Subiste <strong>{len(archivos)} fotos</strong>. "
+            f"Para que la página cargue rápido y sea fácil revisar tus prendas, te recomendamos subir "
+            f"máximo <strong>{MAX_FOTOS_RECOMENDADAS} fotos</strong> por tanda (o guardarlas por partes en «Mi clóset»).</div>",
+            unsafe_allow_html=True,
+        )
+
     prendas = []
     if archivos:
-        st.write("3 · Revisa lo que detectó el sistema y corrige si hace falta.")
+        st.write(f"3 · Revisa lo que detectó el sistema ({len(archivos)} fotos) y corrige si hace falta.")
         cols = st.columns(4)
         for i, archivo in enumerate(archivos):
             datos = archivo.getvalue()
+            miniatura = crear_miniatura(datos, lado_max=300)
             f = analizar(datos)
             tipo_p, seguridad, color_p, ocas_p = predecir(f)
             k = f"{i}_{archivo.name}"
             with cols[i % 4]:
-                st.image(datos)
-                rgb = (int(f["dom_r"]), int(f["dom_g"]), int(f["dom_b"]))
-                st.markdown(f"<div style='display:flex;gap:8px;align-items:center'><div style='width:24px;"
-                            f"height:24px;border-radius:6px;border:1px solid #999;background:{rgb_a_hex(rgb)}'>"
-                            f"</div><span>color detectado con k-means</span></div>", unsafe_allow_html=True)
-                tipo = st.selectbox("Tipo", CLASES, index=CLASES.index(tipo_p), format_func=NOMBRE_CLASE.get,
-                                    key=f"t_{k}")
-                if seguridad is not None:
-                    if seguridad < UMBRAL_SEGURIDAD:
-                        st.warning(f"⚠️ Solo {100 * seguridad:.0f} % seguro del tipo. Revísalo.")
-                    else:
-                        st.caption(f"✔ {100 * seguridad:.0f} % seguro del tipo")
-                color = st.selectbox("Color", COLORES, index=COLORES.index(color_p) if color_p in COLORES else 0,
-                                     key=f"c_{k}")
-                patron = st.selectbox("Patrón", PATRONES, key=f"p_{k}")
-                mezclilla = st.checkbox("Mezclilla", key=f"m_{k}")
-                ocas = st.multiselect("Ocasiones", OCASIONES, default=ocas_p, format_func=NOMBRE_OCASION.get,
-                                      key=f"o_{k}")
+                with st.container(border=True):
+                    st.image(miniatura, width=190)
+                    rgb = (int(f["dom_r"]), int(f["dom_g"]), int(f["dom_b"]))
+                    st.markdown(
+                        f"<div class='chip-color'><span class='swatch-color' style='background:{rgb_a_hex(rgb)}'>"
+                        f"</span><span>Color detectado (k-means)</span></div>",
+                        unsafe_allow_html=True,
+                    )
+                    tipo = st.selectbox("Tipo", CLASES, index=CLASES.index(tipo_p), format_func=NOMBRE_CLASE.get,
+                                        key=f"t_{k}")
+                    if seguridad is not None:
+                        if seguridad < UMBRAL_SEGURIDAD:
+                            st.warning(f"⚠️ Solo {100 * seguridad:.0f} % seguro del tipo. Revísalo.")
+                        else:
+                            st.caption(f"✔ {100 * seguridad:.0f} % seguro del tipo")
+                    color = st.selectbox("Color", COLORES, index=COLORES.index(color_p) if color_p in COLORES else 0,
+                                         key=f"c_{k}")
+                    with st.expander("Más detalles (patrón, mezclilla, ocasiones)"):
+                        patron = st.selectbox("Patrón", PATRONES, key=f"p_{k}")
+                        mezclilla = st.checkbox("Mezclilla", key=f"m_{k}")
+                        ocas = st.multiselect("Ocasiones", OCASIONES, default=ocas_p, format_func=NOMBRE_OCASION.get,
+                                              key=f"o_{k}")
             prendas.append({"nombre": archivo.name, "imagen": datos, "tipo": tipo, "patron": patron,
                             "mezclilla": mezclilla, "ocasiones": ocas, "color": color_para_reglas(f, color)})
 
@@ -195,36 +226,51 @@ with tab_rec:
                        (f", marcadas para «{NOMBRE_OCASION[ocasion]}»." if ocasion else "."))
         for n, r in enumerate(resultados, start=1):
             with st.container(border=True):
-                st.markdown(f"<span class='calif'>#{n} · {r['calificacion']} / 10</span>",
-                            unsafe_allow_html=True)
+                c_head1, c_head2 = st.columns([2, 3])
+                with c_head1:
+                    st.markdown(f"<span class='calif'>Outfit #{n} · {r['calificacion']} / 10</span>",
+                                unsafe_allow_html=True)
+                with c_head2:
+                    st.progress(min(max(r["calificacion"] / 10, 0.0), 1.0))
+
                 cols = st.columns(len(r["piezas"]) + 1)
                 for c, p in zip(cols, r["piezas"]):
-                    c.image(p["imagen"], caption=f"{NOMBRE_CLASE[p['tipo']]} · {p['color']['nombre']}")
+                    with c:
+                        st.image(crear_miniatura(p["imagen"], lado_max=280), width=175)
+                        st.markdown(
+                            f"<div class='pieza-titulo'>{NOMBRE_CLASE[p['tipo']]}</div>"
+                            f"<div class='pieza-sub'>Color: {p['color']['nombre']}</div>",
+                            unsafe_allow_html=True,
+                        )
                 with cols[-1]:
-                    st.progress(r["calificacion"] / 10)
-                    st.markdown("**¿Por qué?**\n" + "\n".join(f"- {x}" for x in r["razones"]))
+                    st.markdown("**¿Por qué combina?**\n" + "\n".join(f"- {x}" for x in r["razones"]))
 
 # ===========================================================================
 # 2. TABLERO ANALÍTICO
 # ===========================================================================
 with tab_tablero:
     if not DATASET.exists():
-        st.info("Corre `py -3.13 2_limpieza.py` para generar el dataset.")
+        st.info("Corre `python3 2_limpieza.py` para generar el dataset.")
     else:
         df = pd.read_csv(DATASET)
         met = pd.read_csv(METRICAS) if METRICAS.exists() else None
         met_c = pd.read_csv(METRICAS_COLOR) if METRICAS_COLOR.exists() else None
         met_o = pd.read_csv(METRICAS_OCASION) if METRICAS_OCASION.exists() and METRICAS_OCASION.stat().st_size > 2 else None
 
-        def barras(serie, titulo, color="#1f3a68"):
-            """Barras horizontales ordenadas de mayor a menor, con el nombre completo de cada categoría."""
+        def barras(serie, titulo, color="#2b4c7e", tam_letra=13, alto_fila=32):
+            """Barras horizontales ordenadas de mayor a menor, con etiquetas claras y legibles."""
             datos = serie.rename_axis("categoria").reset_index(name="valor")
-            grafica = alt.Chart(datos).mark_bar(color=color, cornerRadiusEnd=3).encode(
-                x=alt.X("valor:Q", title=None),
-                y=alt.Y("categoria:N", sort="-x", title=None, axis=alt.Axis(labelLimit=200)),
+            grafica = alt.Chart(datos).mark_bar(color=color, cornerRadiusEnd=4).encode(
+                x=alt.X("valor:Q", title=None, axis=alt.Axis(labelFontSize=12)),
+                y=alt.Y(
+                    "categoria:N",
+                    sort="-x",
+                    title=None,
+                    axis=alt.Axis(labelLimit=260, labelFontSize=tam_letra, labelPadding=8),
+                ),
                 tooltip=[alt.Tooltip("categoria:N", title=titulo), alt.Tooltip("valor:Q", title="Cantidad")],
-            ).properties(height=max(160, 26 * len(datos)), width="container")
-            st.markdown(f"**{titulo}**")
+            ).properties(height=max(180, alto_fila * len(datos)), width="container")
+            st.markdown(f"#### {titulo}")
             st.altair_chart(grafica)
 
         integrantes = df.loc[df["persona"].str.lower() != "general", "persona"].nunique()
@@ -254,19 +300,20 @@ with tab_tablero:
             barras(pd.Series({NOMBRE_OCASION[o]: int(df[f"oc_{o}"].sum()) for o in OCASIONES}), "Prendas por ocasión")
         with c4:
             barras(df["patron"].value_counts(), "Patrón", "#b8892b")
-        barras(df["persona"].value_counts(), "Fotos por carpeta")
+
+        barras(df["persona"].value_counts(), "Fotos por carpeta", color="#2b4c7e", tam_letra=15, alto_fila=38)
 
         if met is not None:
             st.markdown("### Modelos de tipo de prenda")
             st.dataframe(met, hide_index=True)
             comp = met.melt(id_vars="modelo", value_vars=["accuracy", "f1"], var_name="métrica", value_name="valor")
             st.altair_chart(alt.Chart(comp).mark_bar().encode(
-                y=alt.Y("modelo:N", sort="-x", title=None, axis=alt.Axis(labelLimit=200)),
-                x=alt.X("valor:Q", scale=alt.Scale(domain=[0, 1]), title=None),
+                y=alt.Y("modelo:N", sort="-x", title=None, axis=alt.Axis(labelLimit=220, labelFontSize=13)),
+                x=alt.X("valor:Q", scale=alt.Scale(domain=[0, 1]), title=None, axis=alt.Axis(labelFontSize=12)),
                 yOffset="métrica:N",
-                color=alt.Color("métrica:N", scale=alt.Scale(range=["#1f3a68", "#b8892b"]), title=None),
+                color=alt.Color("métrica:N", scale=alt.Scale(range=["#2b4c7e", "#b8892b"]), title=None),
                 tooltip=["modelo", "métrica", alt.Tooltip("valor:Q", format=".3f")],
-            ).properties(height=320, width="container"))
+            ).properties(height=340, width="container"))
             if (MODELADO / "03_matriz_confusion.png").exists():
                 st.image(str(MODELADO / "03_matriz_confusion.png"), caption="Matriz de confusión del mejor modelo")
             if (MODELADO / "01_kmeans_codo_silueta.png").exists():
@@ -297,16 +344,26 @@ with tab_closet:
     else:
         guardadas = prendas_guardadas()
         st.write(f"**{len(guardadas)}** prendas guardadas para **{usuario}**.")
+        if len(guardadas) > MAX_FOTOS_RECOMENDADAS:
+            st.markdown(
+                f"<div class='aviso-limite'>⚠️ Tienes <strong>{len(guardadas)} prendas</strong> guardadas. "
+                f"Las fotos se muestran en miniatura para mantener la página rápida.</div>",
+                unsafe_allow_html=True,
+            )
         cols = st.columns(4)
         for i, g in enumerate(guardadas):
             d = g["datos"]
             with cols[i % 4]:
-                st.image(g["imagen"])
-                st.markdown(f"{NOMBRE_CLASE[d['tipo']]} · {d['color']['nombre']}  \n"
-                            f"<span class='vence'>Se borra el {g['vence'][:10]}</span>", unsafe_allow_html=True)
-                if st.button("🗑️ Quitar", key=f"del_{g['id']}"):
-                    almacen.borrar(usuario, g["id"])
-                    st.rerun()
+                with st.container(border=True):
+                    st.image(crear_miniatura(g["imagen"], lado_max=280), width=185)
+                    st.markdown(
+                        f"**{NOMBRE_CLASE[d['tipo']]}** · {d['color']['nombre']}  \n"
+                        f"<span class='vence'>Se borra el {g['vence'][:10]}</span>",
+                        unsafe_allow_html=True,
+                    )
+                    if st.button("🗑️ Quitar", key=f"del_{g['id']}"):
+                        almacen.borrar(usuario, g["id"])
+                        st.rerun()
 
 # ===========================================================================
 # 4. ARQUITECTURA
