@@ -238,5 +238,7 @@ else:
     paquete["ocasion"] = None
 pd.DataFrame(filas_oc).to_csv(METRICAS_OCASION, index=False)
 
-joblib.dump(paquete, MODELO_FINAL)
+# compress=3 reduce mucho el tamaño (el Random Forest de color ocupa >25 MB sin comprimir)
+joblib.dump(paquete, MODELO_FINAL, compress=3)
+print(f"Tamaño del archivo de modelos: {MODELO_FINAL.stat().st_size / 1e6:.1f} MB")
 print(f"\nModelos guardados en {MODELO_FINAL}")
