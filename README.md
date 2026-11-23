@@ -1,6 +1,8 @@
 # 👕 Recomendador de outfits por ocasión con procesamiento de imágenes
 
-Proyecto final de **Sistemas Inteligentes**.
+Proyecto final de **Sistemas Inteligentes** · UNAM FES Acatlán · MAC · Grupo 1704 · 2027-I
+
+Repositorio: https://github.com/MysticMichelle/recomendador-outfits
 
 El usuario elige **para qué ocasión se viste** (casual, business casual, formal, deportivo o fiesta) y sube fotos de su ropa. El sistema:
 
@@ -85,6 +87,16 @@ py -3.13 4_modelado.py                    # 4. modelos
 py -3.13 -m streamlit run app.py          # 5. web app
 ```
 
+> **El modelo entrenado (`modelos/modelos.joblib`) no se incluye en el repositorio** porque pesa más de 25 MB.
+> Para generarlo basta con correr `py -3.13 4_modelado.py` (tarda unos minutos). **No necesita las fotos**: entrena con `datos/dataset_limpio.csv`, que sí está en el repositorio.
+>
+> Si solo quieres abrir la app con los datos del equipo:
+> ```bash
+> py -3.13 -m pip install -r requirements.txt
+> py -3.13 4_modelado.py
+> py -3.13 -m streamlit run app.py
+> ```
+
 Para probar sin fotos reales: `py -3.13 demo/generar_fotos_demo.py` (y `--borrar` para quitarlas).
 
 ## Modelado
@@ -96,7 +108,30 @@ Para probar sin fotos reales: `py -3.13 demo/generar_fotos_demo.py` (y `--borrar
 **Supervisado**
 - **Tipo de prenda** (5 clases): se comparan KNN, regresión logística, árbol de decisión, Random Forest, SVM y red neuronal (MLP) con accuracy, precisión, recall y F1 macro, más validación cruzada de 5 particiones. Se usa `class_weight="balanced"` por el desbalance de clases. El mejor modelo se elige por F1 de validación cruzada y da el **% de seguridad**.
 - **Color:** se compara la accuracy de las reglas HSV contra un Random Forest entrenado con el color real etiquetado; la app usa el mejor.
-- **Ocasiones:** Random Forest multi-etiqueta (una prenda puede servir para varias ocasiones), evaluado con F1 por ocasión.
+- **Ocasiones:** un clasificador binario por ocasión (una prenda puede servir para varias); se comparan Random Forest y regresión logística y se elige el de mayor F1 promedio en validación cruzada.
+
+## Resultados (1 043 fotos)
+
+| Paso | Resultado |
+|---|---|
+| Limpieza | 1 175 registros leídos → 128 sin etiqueta válida/descartados, 4 duplicados → **1 043 fotos**, 0 nulos |
+| Tipos | superior 588 · inferior 239 · completo 116 · calzado 68 · otro 32 |
+| Prendas neutras | 71.8 % |
+| k-means (todas las fotos) | mejor *k* = 3, silueta 0.099: los grupos **no** corresponden a los tipos de prenda |
+| Tipo de prenda | **Random Forest**: accuracy 0.732, F1 macro 0.628 (validación cruzada 0.630 ± 0.075) |
+| Color | reglas HSV 0.512 → **Random Forest 0.607** |
+| Ocasiones | **Regresión logística**, F1 promedio 0.488 (casual 0.750 · fiesta 0.617 · formal 0.434 · business casual 0.337 · deportivo 0.301) |
+
+| Modelo de tipo | Accuracy | F1 macro | F1 validación cruzada |
+|---|---|---|---|
+| Random Forest ✅ | 0.732 | 0.628 | **0.630 ± 0.075** |
+| SVM (RBF) | 0.742 | 0.638 | 0.617 ± 0.063 |
+| Red neuronal (MLP) | 0.727 | 0.604 | 0.579 ± 0.068 |
+| KNN (k = 5) | 0.679 | 0.548 | 0.525 ± 0.064 |
+| Regresión logística | 0.665 | 0.533 | 0.501 ± 0.058 |
+| Árbol de decisión | 0.569 | 0.526 | 0.424 ± 0.039 |
+
+Las gráficas están en `reportes/eda/` y `reportes/modelado/`.
 
 ## Reglas de color
 
@@ -126,9 +161,11 @@ Para probar sin fotos reales: `py -3.13 demo/generar_fotos_demo.py` (y `--borrar
 
 ## Integrantes
 
-- Angel
-- Fany
-- Leonardo
-- Melanie
-- Michelle
-- Oliver
+- Deciga Torres Melanie
+- Domínguez Lira Estefani Michalle
+- Escobar Sánchez Leonardo
+- Heredia Tamayo Oliver de Yahve
+- Hernández Peña Angel Adrian
+- Moctezuma Isidro Michelle
+
+Profesora: Mirian Ángeles Uribe
