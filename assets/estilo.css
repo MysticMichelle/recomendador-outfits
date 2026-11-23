@@ -1,0 +1,12 @@
+/*
+  estilo.css — estilos extra de la app (se cargan al inicio de app.py).
+  Aquí se puede cambiar la apariencia SIN tocar la lógica de la IA.
+  Clases propias que usa la app:
+    .tarjeta-prenda   recuadro de cada prenda subida
+    .outfit           recuadro de cada outfit recomendado
+    .calif            calificación del outfit
+    .vence            texto "se borra el …" en Mi clóset
+*/
+h1 { letter-spacing: -0.5px; }
+.calif { font-size: 1.6rem; font-weight: 700; color: #1f3a68; }
+.vence { font-size: 0.8rem; color: #5b6475; }

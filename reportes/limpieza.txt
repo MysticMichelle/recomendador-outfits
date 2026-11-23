@@ -1,0 +1,19 @@
+1) Registros leídos de 7 archivo(s): 1175
+2) Homologación: valores de 'tipo' originales ['inferior', 'superior', 'calzado', 'otro', 'descartar', 'completo'] -> ['calzado', 'completo', 'descartar', 'inferior', 'otro', 'superior']
+   colores: {'negro': 298, 'gris': 148, 'blanco': 93, 'café': 91, 'azul': 82, 'azul marino': 64, 'beige': 57, 'rojo': 57, 'verde': 34, 'rosa': 30, 'vino': 24, 'multicolor': 23, 'amarillo': 18, 'celeste': 10, 'morado': 10, 'naranja': 6, 'turquesa': 2}
+   patrones: {'liso': 966, 'gráfico / logo': 73, 'rayas': 54, 'cuadros': 27, 'floral': 25, 'otro estampado': 22, 'lunares': 4, 'animal print': 4}
+3) Quitadas 128 filas (sin etiqueta válida, descartadas o repetidas)
+4) Fotos que no existen: 0 · fotos dañadas: 0
+5) Fotos duplicadas (mismo contenido) eliminadas: 4
+6) Extrayendo características de 1043 fotos (puede tardar unos minutos)...
+7) Valores nulos por columna (solo las que tienen): ninguno
+   Imputación: numéricas -> mediana, color_nombre -> moda, color real vacío (0) -> color de k-means
+
+Dataset limpio: 1043 fotos x 82 columnas -> D:\recomendador_outfits (2)\recomendador_outfits\datos\dataset_limpio.csv
+Fotos por tipo:
+tipo
+superior    588
+inferior    239
+completo    116
+calzado      68
+otro         32

@@ -1,0 +1,6 @@
+ocasion,prendas,f1,modelo
+Casual / diario,674,0.7498,Regresión logística
+Business casual,183,0.3368,Regresión logística
+Formal / evento,113,0.4343,Regresión logística
+Deportivo,122,0.3011,Regresión logística
+Fiesta / noche,103,0.6172,Regresión logística

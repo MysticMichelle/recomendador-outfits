@@ -1,0 +1,31 @@
+Registros: 1043 · Columnas: 82 · Valores nulos: 0
+
+Fotos por tipo:
+tipo
+superior    588
+inferior    239
+completo    116
+calzado      68
+otro         32
+
+Colores reales más frecuentes:
+color
+negro          298
+gris           148
+blanco          93
+café            91
+azul            80
+azul marino     62
+beige           57
+rojo            57
+
+PCA: las 2 primeras componentes explican 21.0% de la varianza
+
+Prendas por ocasión:
+Casual / diario    674
+Business casual    183
+Formal / evento    113
+Deportivo          122
+Fiesta / noche     103
+
+Las reglas de color (k-means + HSV) aciertan el color real en 51.3 % de las prendas

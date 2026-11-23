@@ -1,0 +1,13 @@
+Modelo: Random Forest
+
+              precision    recall  f1-score   support
+
+    superior       0.77      0.86      0.81       118
+    inferior       0.67      0.62      0.65        48
+    completo       0.59      0.43      0.50        23
+     calzado       0.77      0.71      0.74        14
+        otro       0.67      0.33      0.44         6
+
+    accuracy                           0.73       209
+   macro avg       0.69      0.59      0.63       209
+weighted avg       0.72      0.73      0.72       209
