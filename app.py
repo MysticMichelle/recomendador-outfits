@@ -5,7 +5,7 @@ Pestañas:
 1. Recomendador : el usuario elige una OCASIÓN y sube fotos. Para cada foto,
                     el sistema reconoce el tipo de prenda, el color y sugiere
                     ocasiones, y califica combinaciones.
-2. Mi clóset    : prendas guardadas del usuario (se borran solas tras DIAS_GUARDADO días).
+2. Mi clóset    : prendas guardadas del usuario autenticado (se borran solas tras DIAS_GUARDADO días).
 
 Apariencia: .streamlit/config.toml (colores) y assets/estilo.css (estilos extra).
 
@@ -22,6 +22,7 @@ import pandas as pd
 import streamlit as st
 from PIL import Image, ImageOps
 
+from src.auth import cerrar_sesion, iniciar_sesion, registrar_usuario, sesion_actual
 from src.caracteristicas import extraer
 from src.color_kmeans import rgb_a_hex
 from src.closet import obtener_almacen
@@ -162,23 +163,53 @@ def color_para_reglas(f, nombre):
             "fuerte": bool((not neutro) and nombre != "multicolor" and f["es_fuerte"])}
 
 
-# ---------------------------------------------------------------- usuario (Mi clóset)
+# ---------------------------------------------------------------- sesión / Mi clóset
+sesion = sesion_actual()
+closet_user_key = sesion["closet_key"] if sesion else None
+
 with st.sidebar:
     st.markdown(
         f"<div style='display:flex;align-items:center;gap:8px;font-weight:700;font-size:1.1rem;color:#0f172a;'>"
         f"{SVG_ARMA_CLOSET}<span>Mi clóset</span></div>",
         unsafe_allow_html=True,
     )
-    usuario = st.text_input("Tu nombre de usuario", placeholder="ej. michelle",
-                            help="Solo letras y números. Demo: no tiene contraseña.")
-    st.caption(f"Las prendas que guardes se conservan {DIAS_GUARDADO} días y luego se borran solas.")
+
+    if sesion:
+        st.success(f"Sesión activa: **{sesion['email']}**")
+        st.caption(f"Tus prendas guardadas se conservan {DIAS_GUARDADO} días y luego se borran solas.")
+        if st.button("Cerrar sesión", key="btn_logout"):
+            cerrar_sesion()
+            st.rerun()
+    else:
+        st.caption(f"Inicia sesión para guardar tus prendas {DIAS_GUARDADO} días en Mi clóset.")
+        modo_auth = st.radio("Acceso", ["Iniciar sesión", "Crear cuenta"], horizontal=True, label_visibility="collapsed")
+        correo_input = st.text_input("Correo electrónico", placeholder="tu@correo.com", key="auth_email")
+        clave_input = st.text_input("Contraseña", type="password", placeholder="••••••••", key="auth_password")
+
+        if modo_auth == "Iniciar sesión":
+            if st.button("Iniciar sesión", type="primary", key="btn_login"):
+                ok, msg = iniciar_sesion(correo_input, clave_input)
+                if ok:
+                    st.success(msg)
+                    st.rerun()
+                else:
+                    st.error(msg)
+        else:
+            if st.button("Crear cuenta", type="primary", key="btn_signup"):
+                ok, msg = registrar_usuario(correo_input, clave_input)
+                if ok:
+                    st.success(msg)
+                    if sesion_actual():
+                        st.rerun()
+                else:
+                    st.error(msg)
 
 
 def prendas_guardadas():
-    if not usuario:
+    if not closet_user_key:
         return []
     try:
-        return almacen.listar(usuario)
+        return almacen.listar(closet_user_key)
     except ValueError:
         return []
     except Exception as exc:
@@ -193,7 +224,7 @@ st.markdown(
       <h1 class="hero-titulo">Tu armario ya tiene la respuesta</h1>
       <p class="hero-sub">
         Sube tus prendas, elige la ocasión y descubre combinaciones explicadas en segundos.
-        Sin registro obligatorio, o con guardado por {DIAS_GUARDADO} días al escribir tu usuario en Mi clóset.
+        Sin registro obligatorio para probar, o con inicio de sesión y guardado por {DIAS_GUARDADO} días en Mi clóset.
       </p>
     </div>
     """,
@@ -260,13 +291,13 @@ with tab_rec:
                             "mezclilla": mezclilla, "ocasiones": ocas, "color": color_para_reglas(f, color)})
 
     if prendas:
-        if not usuario:
-            st.caption("Escribe tu nombre de usuario en el panel izquierdo y presiona Enter para activar el guardado.")
-        if st.button("Guardar estas prendas en mi clóset", disabled=not usuario,
-                     help=None if usuario else "Escribe tu usuario en la barra lateral"):
+        if not closet_user_key:
+            st.caption("Inicia sesión en el panel izquierdo para activar el guardado en Mi clóset.")
+        if st.button("Guardar estas prendas en mi clóset", disabled=not closet_user_key,
+                     help=None if closet_user_key else "Inicia sesión en la barra lateral"):
             try:
                 for p in prendas:
-                    almacen.guardar(usuario, p["nombre"], p["imagen"],
+                    almacen.guardar(closet_user_key, p["nombre"], p["imagen"],
                                     {k: p[k] for k in ("tipo", "patron", "mezclilla", "ocasiones", "color")})
                 st.success(f"Se guardaron {len(prendas)} prendas por {DIAS_GUARDADO} días.")
             except Exception as exc:
@@ -336,7 +367,7 @@ with tab_rec:
         (p1, "01", "Sube tus fotos", "Añade imágenes de las prendas que quieres combinar hoy."),
         (p2, "02", "Elige la ocasión", "Selecciona casual, trabajo, noche o formal según tu plan."),
         (p3, "03", "Decide cuántas", "Ajusta el número máximo de opciones que quieres revisar."),
-        (p4, "04", "Revisa y guarda", f"Mira calificación y motivos; con usuario guarda {DIAS_GUARDADO} días."),
+        (p4, "04", "Revisa y guarda", f"Mira calificación y motivos; con sesión guarda {DIAS_GUARDADO} días."),
     ]
     for col, num, tit, desc in pasos_info:
         with col:
@@ -354,7 +385,7 @@ with tab_rec:
     beneficios = [
         (SVG_PERCHA, "Solo tu ropa", "Combina prendas que ya tienes, sin comprar nada nuevo."),
         (SVG_OCASION, "Elige la ocasión", "Recomendaciones ajustadas al momento y al estilo."),
-        (SVG_GUARDAR, f"Guarda {DIAS_GUARDADO} días", "Con tu usuario en Mi clóset, tus prendas se conservan por tiempo limitado."),
+        (SVG_GUARDAR, f"Guarda {DIAS_GUARDADO} días", "Con tu sesión iniciada, tus prendas se conservan por tiempo limitado."),
         (SVG_RAPIDO, "Sin registro previo", "Puedes probar el recomendador al momento y subir fotos directo."),
         (SVG_BOMBILLA, "¿Por qué combina?", "Cada outfit explica las razones de color y ocasión."),
         (SVG_ESTRELLA, "Con calificación", "Puntaje del 0 al 10 para comparar opciones rápido."),
@@ -385,7 +416,7 @@ with tab_rec:
               <div class='acento-linea'></div>
               <div class='bloque-titulo'>Tu ropa, guardada</div>
               <p class='bloque-texto'>
-                Escribe tu usuario en la barra lateral y tus prendas quedan guardadas hasta por {DIAS_GUARDADO} días
+                Inicia sesión en la barra lateral y tus prendas quedan guardadas hasta por {DIAS_GUARDADO} días
                 para volver a combinarlas en tu próxima visita.
               </p>
               <ul class='check-lista'>
@@ -422,8 +453,8 @@ with tab_rec:
     st.markdown("### Preguntas frecuentes")
     faqs = [
         ("¿Tengo que registrarme para usar el recomendador?",
-         "No. Puedes subir tus fotos y generar combinaciones al momento sin escribir usuario."),
-        ("¿Qué pasa con mis prendas si escribo un usuario?",
+         "No. Puedes subir tus fotos y generar combinaciones al momento sin iniciar sesión."),
+        ("¿Qué pasa con mis prendas si inicio sesión?",
          f"Se guardan en Mi clóset durante {DIAS_GUARDADO} días para reutilizarlas y luego se limpian automáticamente."),
         ("¿Por qué a veces me muestra menos outfits de los que pedí?",
          "El selector indica el máximo a mostrar; si con las prendas actuales y la ocasión elegida solo se forman menos combinaciones válidas, se muestran las disponibles."),
@@ -458,11 +489,11 @@ with tab_rec:
 # 2. MI CLÓSET
 # ===========================================================================
 with tab_closet:
-    if not usuario:
-        st.info("Escribe tu nombre de usuario en la barra lateral para ver o guardar tu clóset.")
+    if not sesion or not closet_user_key:
+        st.info("Inicia sesión en la barra lateral para ver o guardar tu clóset.")
     else:
         guardadas = prendas_guardadas()
-        st.write(f"**{len(guardadas)}** {'prenda guardada' if len(guardadas) == 1 else 'prendas guardadas'} para **{usuario}**.")
+        st.write(f"**{len(guardadas)}** {'prenda guardada' if len(guardadas) == 1 else 'prendas guardadas'} para **{sesion['email']}**.")
         if not guardadas:
             st.info("Aún no tienes prendas guardadas. Ve a **Recomendador**, sube fotos y pulsa **Guardar estas prendas en mi clóset**.")
         else:
@@ -486,7 +517,7 @@ with tab_closet:
                         )
                         if st.button("Quitar prenda", key=f"del_{g['id']}"):
                             try:
-                                almacen.borrar(usuario, g["id"])
+                                almacen.borrar(closet_user_key, g["id"])
                                 st.rerun()
                             except Exception as exc:
                                 st.error(f"No se pudo quitar la prenda: {exc}")
