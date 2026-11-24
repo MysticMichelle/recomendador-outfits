@@ -1,15 +1,11 @@
 """
-PASO 5 · WEB APP + TABLERO ANALÍTICO
-------------------------------------
+WEB APP DEL RECOMENDADOR DE OUTFITS
+-----------------------------------
 Pestañas:
 1. Recomendador : el usuario elige una OCASIÓN y sube fotos. Para cada foto,
-                    el modelo reconoce el tipo de prenda (con % de seguridad),
-                    el color (k-means + reglas o modelo) y sugiere ocasiones.
-                    Las reglas de color + la colorimetría de la ocasión
-                    califican cada outfit.
-2. Tablero      : KPIs del dataset y de los modelos + gráficas del EDA.
-3. Mi clóset    : prendas guardadas del usuario (se borran solas tras DIAS_GUARDADO días).
-4. Arquitectura : cómo funciona la solución.
+                    el sistema reconoce el tipo de prenda, el color y sugiere
+                    ocasiones, y califica combinaciones.
+2. Mi clóset    : prendas guardadas del usuario (se borran solas tras DIAS_GUARDADO días).
 
 Apariencia: .streamlit/config.toml (colores) y assets/estilo.css (estilos extra).
 
@@ -18,8 +14,8 @@ Ejecutar:
 """
 
 import io
+import re
 
-import altair as alt
 import joblib
 import numpy as np
 import pandas as pd
@@ -29,9 +25,8 @@ from PIL import Image, ImageOps
 from src.caracteristicas import extraer
 from src.color_kmeans import rgb_a_hex
 from src.closet import obtener_almacen
-from src.config import (CLASES, COLORES, DATASET, DIAS_GUARDADO, EDA, ESTILO_CSS, METRICAS, METRICAS_COLOR,
-                        METRICAS_OCASION, MODELADO, MODELO_FINAL, NEUTROS, NOMBRE_CLASE, NOMBRE_OCASION,
-                        OCASIONES, PATRONES, TONO_COLOR, UMBRAL_SEGURIDAD)
+from src.config import (CLASES, COLORES, DIAS_GUARDADO, ESTILO_CSS, MODELO_FINAL, NEUTROS, NOMBRE_CLASE,
+                        NOMBRE_OCASION, OCASIONES, PATRONES, TONO_COLOR)
 from src.reglas import recomendar
 
 MAX_FOTOS_RECOMENDADAS = 30
@@ -88,6 +83,12 @@ if ESTILO_CSS.exists():
 almacen = obtener_almacen()
 
 
+def limpiar_razon(texto):
+    """Quita valores numéricos entre paréntesis al final de cada razón (ej. (+3), (0.46))."""
+    limpio = re.sub(r"\s*\([^)]*\)\s*$", "", str(texto)).strip()
+    return limpio or str(texto).strip()
+
+
 @st.cache_resource
 def limpiar_al_iniciar():
     """Al abrir la app, borra las prendas guardadas que ya vencieron."""
@@ -125,14 +126,12 @@ M = cargar_modelos(MODELO_FINAL.stat().st_mtime if MODELO_FINAL.exists() else 0)
 
 
 def predecir(f):
-    """Tipo (+ seguridad), color y ocasiones sugeridas para una foto."""
+    """Tipo, color y ocasiones sugeridas para una foto."""
     x = pd.DataFrame([f])[M["columnas"]].to_numpy() if M else None
-    tipo, seguridad = "superior", None
+    tipo = "superior"
     if M:
         mt = M["tipo"]["modelo"]
         tipo = str(mt.predict(x)[0])
-        if M["tipo"]["con_probabilidad"]:
-            seguridad = float(mt.predict_proba(x)[0].max())
     color = f["color_nombre"]
     if M and M.get("color"):
         color = str(M["color"]["modelo"].predict(x)[0])
@@ -147,7 +146,7 @@ def predecir(f):
         else:
             pred = modelo_oc.predict(np.hstack([x, onehot]))[0]
             ocas = [o for o, v in zip(M["ocasion"]["ocasiones"], pred) if v == 1]
-    return tipo, seguridad, color, ocas
+    return tipo, color, ocas
 
 
 def color_para_reglas(f, nombre):
@@ -183,7 +182,7 @@ def prendas_guardadas():
 
 st.markdown(
     f"""
-    <div class="hero-closet">
+    <div id="inicio" class="hero-closet">
       <div class="hero-pill">{SVG_PERCHA} <span>Tu armario, con nuevas ideas</span></div>
       <h1 class="hero-titulo">Tu armario ya tiene la respuesta</h1>
       <p class="hero-sub">
@@ -195,11 +194,9 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-tab_rec, tab_tablero, tab_closet, tab_arq = st.tabs([
+tab_rec, tab_closet = st.tabs([
     "Recomendador",
-    "Tablero analítico",
     "Mi clóset",
-    "Arquitectura",
 ])
 
 # ===========================================================================
@@ -207,12 +204,7 @@ tab_rec, tab_tablero, tab_closet, tab_arq = st.tabs([
 # ===========================================================================
 with tab_rec:
     if M is None:
-        st.warning("Todavía no hay modelos entrenados (corre `python3 4_modelado.py`). "
-                   "Mientras, elige todo a mano.")
-    else:
-        st.caption(f"Tipo de prenda: **{M['tipo']['nombre']}** · Color: "
-                   f"**{'Random Forest de color' if M.get('color') else 'k-means + reglas HSV'}** · "
-                   f"Ocasiones: **{M['ocasion'].get('nombre', 'Random Forest') + ' (multi-etiqueta)' if M.get('ocasion') else 'a mano'}**")
+        st.warning("Todavía no hay modelos entrenados. Elige todo a mano.")
 
     opciones = ["todas"] + OCASIONES
     ocasion = st.radio("1 · ¿Para qué ocasión te vas a vestir?", opciones, horizontal=True,
@@ -238,7 +230,7 @@ with tab_rec:
             datos = archivo.getvalue()
             miniatura = crear_miniatura(datos, lado_max=300)
             f = analizar(datos)
-            tipo_p, seguridad, color_p, ocas_p = predecir(f)
+            tipo_p, color_p, ocas_p = predecir(f)
             k = f"{i}_{archivo.name}"
             with cols[i % 4]:
                 with st.container(border=True):
@@ -246,16 +238,11 @@ with tab_rec:
                     rgb = (int(f["dom_r"]), int(f["dom_g"]), int(f["dom_b"]))
                     st.markdown(
                         f"<div class='chip-color'><span class='swatch-color' style='background:{rgb_a_hex(rgb)}'>"
-                        f"</span><span>Color detectado (k-means)</span></div>",
+                        f"</span><span>Color detectado</span></div>",
                         unsafe_allow_html=True,
                     )
                     tipo = st.selectbox("Tipo", CLASES, index=CLASES.index(tipo_p), format_func=NOMBRE_CLASE.get,
                                         key=f"t_{k}")
-                    if seguridad is not None:
-                        if seguridad < UMBRAL_SEGURIDAD:
-                            st.warning(f"Solo {100 * seguridad:.0f} % seguro del tipo. Revísalo.")
-                        else:
-                            st.caption(f"{100 * seguridad:.0f} % seguro del tipo")
                     color = st.selectbox("Color", COLORES, index=COLORES.index(color_p) if color_p in COLORES else 0,
                                          key=f"c_{k}")
                     with st.expander("Más detalles (patrón, mezclilla, ocasiones)"):
@@ -329,10 +316,11 @@ with tab_rec:
                             unsafe_allow_html=True,
                         )
                 with cols[-1]:
-                    st.markdown("**¿Por qué combina?**\n" + "\n".join(f"- {x}" for x in r["razones"]))
+                    razones_limpias = [limpiar_razon(x) for x in r["razones"]]
+                    st.markdown("**¿Por qué combina?**\n" + "\n".join(f"- {x}" for x in razones_limpias))
 
     st.divider()
-    st.markdown("<div class='acento-linea'></div>", unsafe_allow_html=True)
+    st.markdown("<div id='como-funciona' class='acento-linea'></div>", unsafe_allow_html=True)
     st.markdown("### Cómo funciona en 4 pasos")
     p1, p2, p3, p4 = st.columns(4)
     pasos_info = [
@@ -350,7 +338,7 @@ with tab_rec:
             )
 
     st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown("<div class='acento-linea'></div>", unsafe_allow_html=True)
+    st.markdown("<div id='beneficios' class='acento-linea'></div>", unsafe_allow_html=True)
     st.markdown("### Todo lo que necesitas para vestirte hoy")
     st.caption("Pensado para el día a día: rápido, claro y con tu ropa de siempre.")
 
@@ -380,7 +368,48 @@ with tab_rec:
             )
 
     st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown("<div class='acento-linea'></div>", unsafe_allow_html=True)
+    b_izq, b_der = st.columns(2)
+    with b_izq:
+        st.markdown(
+            f"""
+            <div class='bloque-editorial'>
+              <div class='acento-linea'></div>
+              <div class='bloque-titulo'>Tu ropa, guardada</div>
+              <p class='bloque-texto'>
+                Escribe tu usuario en la barra lateral y tus prendas quedan guardadas hasta por {DIAS_GUARDADO} días
+                para volver a combinarlas en tu próxima visita.
+              </p>
+              <ul class='check-lista'>
+                <li><span class='check-circulo'>✓</span><span>Guardado hasta por {DIAS_GUARDADO} días</span></li>
+                <li><span class='check-circulo'>✓</span><span>Sin volver a subir cada vez</span></li>
+                <li><span class='check-circulo'>✓</span><span>O úsalo al instante sin guardar</span></li>
+              </ul>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    with b_der:
+        st.markdown(
+            """
+            <div class='bloque-editorial'>
+              <div class='acento-linea'></div>
+              <div class='bloque-titulo'>Recibe tus outfits</div>
+              <p class='bloque-texto'>
+                Cada combinación llega con calificación del 0 al 10 y una explicación clara de por qué funciona
+                según colorimetría y ocasión.
+              </p>
+              <ul class='check-lista'>
+                <li><span class='check-circulo'>✓</span><span>Calificación visible en cada outfit</span></li>
+                <li><span class='check-circulo'>✓</span><span>Sección clara de «¿Por qué combina?»</span></li>
+                <li><span class='check-circulo'>✓</span><span>Ideas listas para tu día o evento</span></li>
+              </ul>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("<div id='faq' class='acento-linea'></div>", unsafe_allow_html=True)
     st.markdown("### Preguntas frecuentes")
     faqs = [
         ("¿Tengo que registrarme para usar el recomendador?",
@@ -398,98 +427,26 @@ with tab_rec:
         with st.expander(pregunta):
             st.write(respuesta)
 
-# ===========================================================================
-# 2. TABLERO ANALÍTICO
-# ===========================================================================
-with tab_tablero:
-    if not DATASET.exists():
-        st.info("Corre `python3 2_limpieza.py` para generar el dataset.")
-    else:
-        df = pd.read_csv(DATASET)
-        met = pd.read_csv(METRICAS) if METRICAS.exists() else None
-        met_c = pd.read_csv(METRICAS_COLOR) if METRICAS_COLOR.exists() else None
-        met_o = pd.read_csv(METRICAS_OCASION) if METRICAS_OCASION.exists() and METRICAS_OCASION.stat().st_size > 2 else None
-
-        def barras(serie, titulo, color="#b91c46", tam_letra=13, alto_fila=32):
-            """Barras horizontales ordenadas de mayor a menor, con etiquetas claras y legibles."""
-            datos = serie.rename_axis("categoria").reset_index(name="valor")
-            grafica = alt.Chart(datos).mark_bar(color=color, cornerRadiusEnd=4).encode(
-                x=alt.X("valor:Q", title=None, axis=alt.Axis(labelFontSize=12)),
-                y=alt.Y(
-                    "categoria:N",
-                    sort="-x",
-                    title=None,
-                    axis=alt.Axis(labelLimit=260, labelFontSize=tam_letra, labelPadding=8),
-                ),
-                tooltip=[alt.Tooltip("categoria:N", title=titulo), alt.Tooltip("valor:Q", title="Cantidad")],
-            ).properties(height=max(180, alto_fila * len(datos)), width="container")
-            st.markdown(f"#### {titulo}")
-            st.altair_chart(grafica)
-
-        integrantes = df.loc[df["persona"].str.lower() != "general", "persona"].nunique()
-        st.markdown("#### Datos")
-        k1, k2, k3, k4 = st.columns(4)
-        k1.metric("Fotos en el dataset", f"{len(df):,}")
-        k2.metric("Integrantes que aportaron fotos", integrantes)
-        k3.metric("% prendas neutras", f"{100 * df['color'].isin(NEUTROS).mean():.0f}%")
-        k4.metric("% prendas casuales", f"{100 * df['oc_casual'].mean():.0f}%")
-        st.markdown("#### Modelos")
-        k5, k6, k7, k8 = st.columns(4)
-        if met is not None:
-            k5.metric(f"Accuracy tipo ({met.iloc[0]['modelo']})", f"{100 * met.iloc[0]['accuracy']:.0f}%")
-            k6.metric("F1 macro tipo", f"{met.iloc[0]['f1']:.2f}")
-        if met_c is not None:
-            k7.metric("Accuracy del color", f"{100 * met_c['accuracy'].max():.0f}%")
-        if met_o is not None and "precision" in met_o:
-            k8.metric("Precisión de ocasiones", f"{100 * met_o['precision'].mean():.0f}%")
-
-        c1, c2 = st.columns(2)
-        with c1:
-            barras(df["tipo"].map(lambda t: NOMBRE_CLASE[t].split(" ", 1)[-1]).value_counts(), "Fotos por tipo de prenda")
-        with c2:
-            barras(df["color"].value_counts(), "Color real (etiquetado)", "#b8892b")
-        c3, c4 = st.columns(2)
-        with c3:
-            barras(pd.Series({NOMBRE_OCASION[o]: int(df[f"oc_{o}"].sum()) for o in OCASIONES}), "Prendas por ocasión")
-        with c4:
-            barras(df["patron"].value_counts(), "Patrón", "#b8892b")
-
-        barras(df["persona"].value_counts(), "Fotos por carpeta", color="#8f1335", tam_letra=15, alto_fila=38)
-
-        if met is not None:
-            st.markdown("### Modelos de tipo de prenda")
-            st.dataframe(met, hide_index=True)
-            comp = met.melt(id_vars="modelo", value_vars=["accuracy", "f1"], var_name="métrica", value_name="valor")
-            st.altair_chart(alt.Chart(comp).mark_bar().encode(
-                y=alt.Y("modelo:N", sort="-x", title=None, axis=alt.Axis(labelLimit=220, labelFontSize=13)),
-                x=alt.X("valor:Q", scale=alt.Scale(domain=[0, 1]), title=None, axis=alt.Axis(labelFontSize=12)),
-                yOffset="métrica:N",
-                color=alt.Color("métrica:N", scale=alt.Scale(range=["#b91c46", "#b8892b"]), title=None),
-                tooltip=["modelo", "métrica", alt.Tooltip("valor:Q", format=".3f")],
-            ).properties(height=340, width="container"))
-            if (MODELADO / "03_matriz_confusion.png").exists():
-                st.image(str(MODELADO / "03_matriz_confusion.png"), caption="Matriz de confusión del mejor modelo")
-            if (MODELADO / "01_kmeans_codo_silueta.png").exists():
-                st.image(str(MODELADO / "01_kmeans_codo_silueta.png"), caption="No supervisado: elección de k")
-        cc, co = st.columns(2)
-        if met_c is not None:
-            with cc:
-                st.markdown("### Color: reglas vs modelo")
-                st.dataframe(met_c, hide_index=True)
-        if met_o is not None:
-            with co:
-                st.markdown("### Ocasiones: umbral, precisión, recall y F1")
-                st.dataframe(met_o, hide_index=True)
-
-        graficas = sorted(EDA.glob("*.png")) if EDA.exists() else []
-        if graficas:
-            st.markdown("### Análisis exploratorio (EDA)")
-            cols = st.columns(2)
-            for i, g in enumerate(graficas):
-                cols[i % 2].image(str(g))
+    st.markdown(
+        """
+        <footer class="footer-oscuro">
+          <div>
+            <div class="footer-marca">Recomendador de outfits</div>
+            <p class="footer-desc">Combinaciones inteligentes con la ropa que ya tienes.</p>
+          </div>
+          <ul class="footer-links">
+            <li><a href="#inicio">Inicio</a></li>
+            <li><a href="#como-funciona">Cómo funciona</a></li>
+            <li><a href="#beneficios">Beneficios</a></li>
+            <li><a href="#faq">Preguntas frecuentes</a></li>
+          </ul>
+        </footer>
+        """,
+        unsafe_allow_html=True,
+    )
 
 # ===========================================================================
-# 3. MI CLÓSET
+# 2. MI CLÓSET
 # ===========================================================================
 with tab_closet:
     if not usuario:
@@ -520,25 +477,3 @@ with tab_closet:
                         if st.button("Quitar prenda", key=f"del_{g['id']}"):
                             almacen.borrar(usuario, g["id"])
                             st.rerun()
-
-# ===========================================================================
-# 4. ARQUITECTURA
-# ===========================================================================
-with tab_arq:
-    st.markdown("""
-### ¿Cómo funciona?
-
-| Paso | Archivo | Qué hace |
-|---|---|---|
-| 1 | `1_etiquetar.py` | Etiquetar cada foto: tipo, color real, patrón, mezclilla y ocasiones |
-| 2 | `2_limpieza.py` | Homologa etiquetas con regex, quita duplicados y fotos dañadas, extrae características e imputa nulos |
-| 3 | `3_eda.py` | Análisis univariado, bivariado y multivariado; qué tanto aciertan las reglas de color |
-| 4 | `4_modelado.py` | **No supervisado:** k-means. **Supervisado:** 6 modelos de tipo, modelo de color y modelo de ocasiones |
-| 5 | `app.py` | Esta web app: recomendador por ocasión + tablero de KPIs + Mi clóset |
-
-**Flujo en el recomendador:**
-ocasión elegida → **filtro**: solo prendas de esa ocasión → para cada foto: k-means (color) → características →
-modelo (tipo + % de seguridad) → reglas de teoría del color + **colorimetría de la ocasión** → outfits del 0 al 10.
-
-**Tipos de outfit:** arriba + abajo (+ calzado), o completo (vestido, overol) + calzado.
-""")

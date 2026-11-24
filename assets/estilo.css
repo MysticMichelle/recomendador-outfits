@@ -50,25 +50,27 @@
   max-width: 720px;
 }
 
-.seccion-editorial {
+.bloque-editorial {
   background: #f8f9fb;
+  border: 1px solid #eceff4;
   border-radius: 18px;
-  padding: 1.6rem 1.4rem;
-  margin: 1.2rem 0;
+  padding: 1.45rem 1.35rem;
+  margin: 1rem 0;
 }
 
-.seccion-titulo {
-  margin: 0 0 0.35rem 0;
-  font-size: 1.65rem;
+.bloque-titulo {
+  margin: 0 0 0.4rem 0;
+  font-size: 1.45rem;
   font-weight: 800;
   color: #0b132b;
-  letter-spacing: -0.4px;
+  letter-spacing: -0.3px;
 }
 
-.seccion-sub {
-  margin: 0 0 1.2rem 0;
+.bloque-texto {
+  margin: 0 0 0.7rem 0;
   color: #526071;
-  font-size: 0.96rem;
+  font-size: 0.94rem;
+  line-height: 1.5;
 }
 
 .paso-card {
@@ -140,16 +142,16 @@
 .check-lista {
   list-style: none;
   padding: 0;
-  margin: 0.75rem 0 0 0;
+  margin: 0.5rem 0 0 0;
 }
 
 .check-lista li {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 0.35rem 0;
+  padding: 0.3rem 0;
   color: #1e293b;
-  font-size: 0.94rem;
+  font-size: 0.92rem;
   font-weight: 500;
 }
 
@@ -165,6 +167,52 @@
   font-size: 0.78rem;
   font-weight: 800;
   flex-shrink: 0;
+}
+
+.footer-oscuro {
+  margin-top: 2rem;
+  background: #070b19;
+  color: #e2e8f0;
+  border-radius: 18px;
+  padding: 2rem 1.75rem;
+  display: grid;
+  grid-template-columns: 1.3fr 1fr;
+  gap: 2rem;
+}
+
+.footer-marca {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #ffffff;
+  margin-bottom: 0.45rem;
+}
+
+.footer-desc {
+  font-size: 0.9rem;
+  color: #94a3b8;
+  line-height: 1.5;
+  max-width: 360px;
+  margin: 0;
+}
+
+.footer-links {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.footer-links a {
+  color: #cbd5e1;
+  text-decoration: none;
+  font-size: 0.92rem;
+  transition: color 0.15s ease;
+}
+
+.footer-links a:hover {
+  color: #ffffff;
 }
 
 .svg-icon {
@@ -309,6 +357,12 @@
     font-size: 1.7rem;
   }
 
+  .footer-oscuro {
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+    padding: 1.5rem 1.25rem;
+  }
+
   [data-baseweb="tab-list"] {
     flex-wrap: nowrap !important;
     overflow-x: auto !important;
@@ -331,8 +385,8 @@
     font-size: 1.45rem;
   }
 
-  .seccion-titulo {
-    font-size: 1.35rem;
+  .bloque-titulo {
+    font-size: 1.25rem;
   }
 
   .calif {
