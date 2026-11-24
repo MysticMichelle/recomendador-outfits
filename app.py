@@ -92,7 +92,10 @@ def limpiar_razon(texto):
 @st.cache_resource
 def limpiar_al_iniciar():
     """Al abrir la app, borra las prendas guardadas que ya vencieron."""
-    return almacen.limpiar_vencidas()
+    try:
+        return almacen.limpiar_vencidas()
+    except Exception:
+        return 0
 
 
 limpiar_al_iniciar()
@@ -178,6 +181,9 @@ def prendas_guardadas():
         return almacen.listar(usuario)
     except ValueError:
         return []
+    except Exception as exc:
+        st.warning(f"No se pudo consultar Mi clóset en este momento: {exc}")
+        return []
 
 
 st.markdown(
@@ -258,10 +264,13 @@ with tab_rec:
             st.caption("Escribe tu nombre de usuario en el panel izquierdo y presiona Enter para activar el guardado.")
         if st.button("Guardar estas prendas en mi clóset", disabled=not usuario,
                      help=None if usuario else "Escribe tu usuario en la barra lateral"):
-            for p in prendas:
-                almacen.guardar(usuario, p["nombre"], p["imagen"],
-                                {k: p[k] for k in ("tipo", "patron", "mezclilla", "ocasiones", "color")})
-            st.success(f"Se guardaron {len(prendas)} prendas por {DIAS_GUARDADO} días.")
+            try:
+                for p in prendas:
+                    almacen.guardar(usuario, p["nombre"], p["imagen"],
+                                    {k: p[k] for k in ("tipo", "patron", "mezclilla", "ocasiones", "color")})
+                st.success(f"Se guardaron {len(prendas)} prendas por {DIAS_GUARDADO} días.")
+            except Exception as exc:
+                st.error(f"No se pudieron guardar las prendas: {exc}")
 
     guardadas = prendas_guardadas()
     usar_closet = st.checkbox(f"Incluir mi clóset guardado ({len(guardadas)} prendas)",
@@ -469,11 +478,15 @@ with tab_closet:
                 with cols[i % 4]:
                     with st.container(border=True):
                         st.image(crear_miniatura(g["imagen"], lado_max=280), width=185)
+                        vence_texto = str(g.get("vence_en") or g.get("vence") or "")[:10]
                         st.markdown(
                             f"**{NOMBRE_CLASE[d['tipo']]}** · {d['color']['nombre']}  \n"
-                            f"<span class='vence'>{SVG_ETIQUETA}<span>Se borra el {g['vence'][:10]}</span></span>",
+                            f"<span class='vence'>{SVG_ETIQUETA}<span>Se borra el {vence_texto}</span></span>",
                             unsafe_allow_html=True,
                         )
                         if st.button("Quitar prenda", key=f"del_{g['id']}"):
-                            almacen.borrar(usuario, g["id"])
-                            st.rerun()
+                            try:
+                                almacen.borrar(usuario, g["id"])
+                                st.rerun()
+                            except Exception as exc:
+                                st.error(f"No se pudo quitar la prenda: {exc}")
