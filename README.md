@@ -7,11 +7,11 @@ Repositorio: https://github.com/MysticMichelle/recomendador-outfits
 El usuario elige **para qué ocasión se viste** (casual, business casual, formal, deportivo o fiesta) y sube fotos de su ropa. El sistema:
 
 1. **Filtra** las prendas que sirven para esa ocasión.
-2. **Reconoce el tipo de prenda** con un modelo supervisado y muestra su **% de seguridad**; si baja de 60 %, avisa.
+2. **Reconoce el tipo de prenda y sus ocasiones** con una **red neuronal convolucional preentrenada (MobileNetV2)** como extractor de características + un Random Forest.
 3. **Obtiene el color** con k-means (no supervisado) y lo nombra con reglas HSV o con un modelo entrenado, el que acierte más.
 4. **Califica cada outfit** del 0 al 10 con reglas de teoría del color + la **colorimetría de la ocasión**, y explica por qué.
 
-Incluye un **tablero analítico** con KPIs.
+El usuario puede corregir lo detectado y guardar sus prendas en **Mi clóset** (30 días).
 
 ## Problemática y solución
 
@@ -31,12 +31,13 @@ fotos ──► 1_etiquetar.py ──► etiquetas/*.csv  (tipo, color, patrón,
                                    │
                                    ▼
                           4_modelado.py  (k-means · 6 modelos de tipo · modelo de color · modelo de ocasiones)
+                          5_cnn_experimento.py  (MobileNetV2 → mismos 6 modelos; se adopta si mejora el F1)
                                    │
                                    ▼
                           modelos/modelos.joblib
                                    │
                                    ▼
-                          app.py  (Recomendador por ocasión + Tablero de KPIs)
+                          app.py  (Recomendador por ocasión + Mi clóset)
 ```
 
 ## Estructura
@@ -47,7 +48,8 @@ fotos ──► 1_etiquetar.py ──► etiquetas/*.csv  (tipo, color, patrón,
 | `2_limpieza.py` | Limpieza, homologación, duplicados, características, imputación |
 | `3_eda.py` | EDA univariado, bivariado y multivariado (incluye qué tanto aciertan las reglas de color) |
 | `4_modelado.py` | k-means (codo + silueta), 6 clasificadores de tipo, modelo de color y modelo de ocasiones |
-| `app.py` | Web app: recomendador por ocasión + tablero analítico + Mi clóset |
+| `5_cnn_experimento.py` | Características de MobileNetV2 (transfer learning) y comparación con las manuales |
+| `app.py` | Web app: recomendador por ocasión + Mi clóset |
 | `src/closet.py` | Mi clóset: guardar prendas por usuario (se borran solas a los 30 días) |
 | `.streamlit/config.toml`, `assets/estilo.css` | Tema y estilos visuales de la app |
 | `GUIA_DESARROLLO.md` | Guía para quien continúe el diseño y las funciones |
@@ -84,11 +86,12 @@ py -3.13 -m streamlit run 1_etiquetar.py   # 1. etiquetar
 py -3.13 2_limpieza.py                    # 2. limpieza
 py -3.13 3_eda.py                         # 3. EDA
 py -3.13 4_modelado.py                    # 4. modelos
-py -3.13 -m streamlit run app.py          # 5. web app
+py -3.13 5_cnn_experimento.py             # 5. CNN preentrenada (requiere las fotos)
+py -3.13 -m streamlit run app.py          # 6. web app
 ```
 
-> El repositorio incluye el modelo ya entrenado (`modelos/modelos.joblib`, 10.4 MB comprimido), así que la app se puede abrir directamente.
-> Para reentrenarlo basta con `py -3.13 4_modelado.py`: **no necesita las fotos**, usa `datos/dataset_limpio.csv`.
+> El repositorio incluye los modelos entrenados (`modelos/modelos.joblib`, `modelos/modelos_cnn.joblib`) y MobileNetV2 en formato ONNX (`modelos/mobilenetv2-12.onnx`), así que la app se puede abrir directamente.
+> `4_modelado.py` no necesita las fotos (usa `datos/dataset_limpio.csv`); `5_cnn_experimento.py` sí, porque pasa cada foto por la red.
 
 Para probar sin fotos reales: `py -3.13 demo/generar_fotos_demo.py` (y `--borrar` para quitarlas).
 
@@ -99,7 +102,8 @@ Para probar sin fotos reales: `py -3.13 demo/generar_fotos_demo.py` (y `--borrar
 - *k-means de scikit-learn* sobre todas las fotos: se elige *k* con el método del codo y el coeficiente de silueta.
 
 **Supervisado**
-- **Tipo de prenda** (5 clases): se comparan KNN, regresión logística, árbol de decisión, Random Forest, SVM y red neuronal (MLP) con accuracy, precisión, recall y F1 macro, más validación cruzada de 5 particiones. Se usa `class_weight="balanced"` por el desbalance de clases. El mejor modelo se elige por F1 de validación cruzada y da el **% de seguridad**.
+- **Tipo de prenda** (5 clases): se comparan KNN, regresión logística, árbol de decisión, Random Forest, SVM y red neuronal (MLP) con accuracy, precisión, recall y F1 macro, más validación cruzada de 5 particiones. Se usa `class_weight="balanced"` por el desbalance de clases. El mejor modelo se elige por F1 de validación cruzada.
+- **CNN preentrenada (transfer learning):** cada foto pasa por MobileNetV2 (entrenada con ImageNet, formato ONNX con `onnxruntime`, sin PyTorch ni TensorFlow) y sus 1 000 salidas se usan como características para los mismos 6 clasificadores, con la misma partición y validación cruzada. Si supera al modelo manual en F1 de validación cruzada, la app la usa para el tipo y las ocasiones.
 - **Color:** se compara la accuracy de las reglas HSV contra un Random Forest entrenado con el color real etiquetado; la app usa el mejor.
 - **Ocasiones:** un clasificador binario por ocasión (una prenda puede servir para varias); se comparan Random Forest y regresión logística; para cada ocasión se ajusta el umbral de decisión que maximiza F0.5 (prioriza la precisión, porque la ocasión se usa como filtro) y se elige el modelo con mejor F0.5 promedio.
 
@@ -111,18 +115,19 @@ Para probar sin fotos reales: `py -3.13 demo/generar_fotos_demo.py` (y `--borrar
 | Tipos | superior 588 · inferior 239 · completo 116 · calzado 68 · otro 32 |
 | Prendas neutras | 71.8 % |
 | k-means (todas las fotos) | mejor *k* = 3, silueta 0.099: los grupos **no** corresponden a los tipos de prenda |
-| Tipo de prenda | **Random Forest**: accuracy 0.732, F1 macro 0.628 (validación cruzada 0.630 ± 0.075) |
+| Tipo de prenda (manual, 67 características) | Random Forest: accuracy 0.732, F1 macro 0.628 (validación cruzada 0.630 ± 0.075) |
+| **Tipo de prenda (CNN, 1 000 características)** | **Random Forest: accuracy 0.818, F1 macro 0.781 (validación cruzada 0.875 ± 0.059)** ← usado en la app |
 | Color | reglas HSV 0.512 → **Random Forest 0.607** |
-| Ocasiones | **Random Forest** con umbral por ocasión: precisión promedio 0.673, recall 0.353 (casual: precisión 0.80 / recall 0.74 · deportivo: 0.82 / 0.12 · fiesta: 0.77 / 0.42) |
+| Ocasiones (CNN) | **Random Forest** con umbral por ocasión: precisión promedio 0.629, recall 0.505, F1 0.545 (manual: 0.673 / 0.353 / 0.432) |
 
-| Modelo de tipo | Accuracy | F1 macro | F1 validación cruzada |
+| Modelo de tipo (F1 validación cruzada) | Manual (67) | CNN (1 000) | CNN + manual (1 067) |
 |---|---|---|---|
-| Random Forest (seleccionado) | 0.732 | 0.628 | **0.630 ± 0.075** |
-| SVM (RBF) | 0.742 | 0.638 | 0.617 ± 0.063 |
-| Red neuronal (MLP) | 0.727 | 0.604 | 0.579 ± 0.068 |
-| KNN (k = 5) | 0.679 | 0.548 | 0.525 ± 0.064 |
-| Regresión logística | 0.665 | 0.533 | 0.501 ± 0.058 |
-| Árbol de decisión | 0.569 | 0.526 | 0.424 ± 0.039 |
+| Random Forest | 0.630 | **0.875** (seleccionado) | 0.873 |
+| SVM (RBF) | 0.617 | 0.864 | 0.862 |
+| Red neuronal (MLP) | 0.579 | 0.862 | 0.863 |
+| Regresión logística | 0.501 | 0.855 | 0.856 |
+| KNN (k = 5) | 0.525 | 0.802 | 0.806 |
+| Árbol de decisión | 0.424 | 0.671 | 0.656 |
 
 Las gráficas están en `reportes/eda/` y `reportes/modelado/`.
 

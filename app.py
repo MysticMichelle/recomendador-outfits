@@ -22,6 +22,7 @@ import pandas as pd
 import streamlit as st
 from PIL import Image, ImageOps
 
+from src import cnn
 from src.caracteristicas import extraer
 from src.color_kmeans import rgb_a_hex
 from src.closet import obtener_almacen
@@ -124,28 +125,54 @@ def crear_miniatura(datos, lado_max=320):
 
 M = cargar_modelos(MODELO_FINAL.stat().st_mtime if MODELO_FINAL.exists() else 0)
 
+MODELO_CNN = MODELO_FINAL.parent / "modelos_cnn.joblib"
 
-def predecir(f):
-    """Tipo, color y ocasiones sugeridas para una foto."""
+
+@st.cache_resource
+def cargar_modelos_cnn(version):
+    """Modelo con características de la CNN preentrenada (5_cnn_experimento.py).
+    Solo se usa si existe el archivo y están instalados onnxruntime y MobileNetV2."""
+    return joblib.load(MODELO_CNN) if MODELO_CNN.exists() and cnn.disponible() else None
+
+
+MC = cargar_modelos_cnn(MODELO_CNN.stat().st_mtime if MODELO_CNN.exists() else 0)
+
+
+@st.cache_data(show_spinner=False)
+def analizar_cnn(datos):
+    """Vector de 1000 características de MobileNetV2 para una foto subida."""
+    return cnn.vector(Image.open(io.BytesIO(datos)))
+
+
+def predecir(f, datos=None):
+    """Tipo, color y ocasiones sugeridas para una foto.
+    Si está el modelo con CNN (MC), el tipo y las ocasiones se predicen con las características
+    de MobileNetV2; el color sigue usando k-means + Random Forest de color."""
     x = pd.DataFrame([f])[M["columnas"]].to_numpy() if M else None
     tipo = "superior"
-    if M:
-        mt = M["tipo"]["modelo"]
-        tipo = str(mt.predict(x)[0])
+    x_cnn = None
+    if MC and M and datos is not None:
+        v = analizar_cnn(datos)[None]
+        x_cnn = v if MC["entrada"].startswith("CNN (") else np.hstack([v, x])
+        tipo = str(MC["tipo"]["modelo"].predict(x_cnn)[0])
+    elif M:
+        tipo = str(M["tipo"]["modelo"].predict(x)[0])
     color = f["color_nombre"]
     if M and M.get("color"):
         color = str(M["color"]["modelo"].predict(x)[0])
     ocas = []
-    if M and M.get("ocasion"):
+    fuente = MC if (x_cnn is not None and MC.get("ocasion")) else M
+    if fuente and fuente.get("ocasion"):
         onehot = np.array([[int(tipo == c) for c in CLASES]])
-        modelo_oc = M["ocasion"]["modelo"]
-        umbrales = M["ocasion"].get("umbrales")
+        x_oc = np.hstack([x_cnn if fuente is MC else x, onehot])
+        modelo_oc = fuente["ocasion"]["modelo"]
+        umbrales = fuente["ocasion"].get("umbrales")
         if umbrales:
-            probas = [p[0, 1] for p in modelo_oc.predict_proba(np.hstack([x, onehot]))]
-            ocas = [o for o, p in zip(M["ocasion"]["ocasiones"], probas) if p >= umbrales[o]]
+            probas = [p[0, 1] for p in modelo_oc.predict_proba(x_oc)]
+            ocas = [o for o, p in zip(fuente["ocasion"]["ocasiones"], probas) if p >= umbrales[o]]
         else:
-            pred = modelo_oc.predict(np.hstack([x, onehot]))[0]
-            ocas = [o for o, v in zip(M["ocasion"]["ocasiones"], pred) if v == 1]
+            pred = modelo_oc.predict(x_oc)[0]
+            ocas = [o for o, val in zip(fuente["ocasion"]["ocasiones"], pred) if val == 1]
     return tipo, color, ocas
 
 
@@ -230,7 +257,7 @@ with tab_rec:
             datos = archivo.getvalue()
             miniatura = crear_miniatura(datos, lado_max=300)
             f = analizar(datos)
-            tipo_p, color_p, ocas_p = predecir(f)
+            tipo_p, color_p, ocas_p = predecir(f, datos)
             k = f"{i}_{archivo.name}"
             with cols[i % 4]:
                 with st.container(border=True):

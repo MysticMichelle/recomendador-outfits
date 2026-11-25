@@ -1,0 +1,6 @@
+ocasion,prendas,umbral,precision,recall,f1,modelo
+Casual / diario,674,0.55,0.8432,0.8056,0.824,Random Forest
+Business casual,183,0.4,0.356,0.3716,0.3636,Random Forest
+Formal / evento,113,0.4,0.6116,0.6549,0.6325,Random Forest
+Deportivo,122,0.4,0.494,0.3361,0.4,Random Forest
+Fiesta / noche,103,0.55,0.8409,0.3592,0.5034,Random Forest

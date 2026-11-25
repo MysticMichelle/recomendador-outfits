@@ -1,0 +1,19 @@
+caracteristicas,modelo,accuracy,f1,f1_cv_media,f1_cv_desv
+Manual (67),KNN (k=5),0.6794,0.5484,0.5246,0.0638
+Manual (67),Regresión logística,0.6651,0.5332,0.5012,0.0584
+Manual (67),Árbol de decisión,0.5694,0.5264,0.4244,0.0394
+Manual (67),Random Forest,0.7321,0.6283,0.6295,0.0748
+Manual (67),SVM (kernel RBF),0.7416,0.638,0.6174,0.0628
+Manual (67),Red neuronal (MLP),0.7273,0.6041,0.5792,0.0683
+CNN (1000),KNN (k=5),0.8421,0.8186,0.802,0.0794
+CNN (1000),Regresión logística,0.8421,0.8276,0.8548,0.0247
+CNN (1000),Árbol de decisión,0.7464,0.7163,0.671,0.0465
+CNN (1000),Random Forest,0.8182,0.7806,0.8751,0.0587
+CNN (1000),SVM (kernel RBF),0.8708,0.8164,0.8643,0.0422
+CNN (1000),Red neuronal (MLP),0.8612,0.8137,0.8615,0.0372
+CNN + manual (1067),KNN (k=5),0.823,0.7881,0.8059,0.0721
+CNN + manual (1067),Regresión logística,0.8612,0.8354,0.8564,0.0173
+CNN + manual (1067),Árbol de decisión,0.7464,0.7143,0.6559,0.0496
+CNN + manual (1067),Random Forest,0.8278,0.8103,0.8731,0.0572
+CNN + manual (1067),SVM (kernel RBF),0.8708,0.8246,0.8616,0.06
+CNN + manual (1067),Red neuronal (MLP),0.8852,0.8599,0.8629,0.0653
